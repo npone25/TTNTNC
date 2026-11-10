@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+venv/
+.vscode/
+.idea/
+# Dữ liệu thô nặng: không đẩy lên git (tạo lại được bằng utils/data.py)
+files/*.p
+files/*.pkl
+files/*.npz
+# Mô hình .keras và log thô trong results/logs ĐƯỢC đẩy lên git vì đề bắt buộc nộp
+# File tạm của Word, PowerPoint
+~$*
