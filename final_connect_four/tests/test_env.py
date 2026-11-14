@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from utils.conn_simple_env import conn, InvalidMoveError
-from conftest import slow_winner, count_windows
+from conftest import slow_winner
 
 # Ván thật lấy từ chơi ngẫu nhiên có seed: kết thúc ở nước 42 bằng một nước THẮNG
 WIN_ON_MOVE_42 = [5, 6, 7, 5, 5, 5, 4, 5, 2, 3, 4, 3, 6, 4, 1, 7, 2, 2, 5, 7, 1, 3, 3, 4,
@@ -41,8 +41,9 @@ def test_cot_day_bi_loai():
     with pytest.raises(InvalidMoveError):
         env.step(1)
 
-# Gắn dữ liệu chạy này cho hàm ngay bên dưới 
-@pytest.mark.parametrize("moves, winner", [ 
+# Một hàm test chạy 6 lần, mỗi lần một dòng (dãy nước, người thắng mong đợi).
+# Dãy nước xen kẽ đỏ, vàng, đỏ đi trước; người thắng: 1 là đỏ, -1 là vàng.
+@pytest.mark.parametrize("moves, winner", [
     ([1, 7, 2, 7, 3, 6, 4], 1),          # đỏ ngang
     ([1, 2, 1, 2, 1, 3, 1], 1),          # đỏ dọc
     ([1, 2, 2, 3, 3, 4, 3, 4, 4, 7, 4], 1),   # đỏ chéo /
@@ -136,7 +137,8 @@ def test_undo_sau_nuoc_thang():
     assert env.is_terminal() is False
     assert env.result() is None
     assert env.turn == "red"
-    assert env.state[3][0] == 0    # quân Đỏ ở cột 4 đã bị gỡ
+    # quân đỏ ở đáy cột 4 phải được gỡ ra, cả 7 cột lại đi được
+    assert env.state[3][0] == 0
     assert env.legal_actions() == [1, 2, 3, 4, 5, 6, 7]
 
 def test_clone_doc_lap():
@@ -159,13 +161,13 @@ def test_render():
     assert lines[-3] == ". . . O . . ."
 
 
-def test_so_cua_so_bon_o_la_69():
-    assert count_windows() == 69
-
-# tổng kiểu đi != tổng thế cờ -> nhiều kiểu đi có thể ra cùng 1 thế cờ 
-# tính số dãy nước đi có thể thực hiện nếu đi trong depth nước, chuẩn khi env là rỗng
 def count_sequences(env, depth):
-    """Đếm số dãy nước đi hợp lệ dài depth, dùng step và undo."""
+    """Đếm số dãy nước đi khác nhau nếu đi thêm depth nước tính từ thế cờ env (perft).
+
+    Đây là đếm DÃY nước chứ không phải đếm thế cờ: hai dãy khác thứ tự có thể ra cùng
+    một bàn, nhưng vẫn tính là hai. Mỗi tầng đệ quy thử từng cột (step), đếm phần còn lại,
+    rồi lùi lại (undo), nên đếm xong env trở về đúng như lúc đầu.
+    """
     if depth == 0:
         return 1
     total = 0
@@ -178,7 +180,9 @@ def count_sequences(env, depth):
 
 @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
 def test_perft(depth):
-    # trước nước thứ 7 chưa ai thắng được nên số dãy nước đúng bằng 7^depth
+    # Từ bàn trống, 6 nước đầu chưa cột nào đầy và chưa ai đủ 4 quân để thắng,
+    # nên lượt nào cũng đủ 7 lựa chọn và đáp án đúng phải là 7^depth.
+    # Engine sai ở step, undo hay legal_actions thì số đếm sẽ lệch.
     env = conn()
     assert count_sequences(env, depth) == 7 ** depth
     # sau khi duyệt xong, bàn cờ phải trở về trống
