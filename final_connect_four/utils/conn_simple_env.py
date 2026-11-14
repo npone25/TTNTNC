@@ -2,7 +2,7 @@
 
 Kế thừa: utils/conn_simple_env.py, sách AlphaGo Simplified (Mark Liu), giấy phép MIT. Giữ quy ước: cột 1-7, state (7, 6), lượt 'red'/'yellow', reward theo góc bên đỏ.
 Sửa: bỏ import turtle không dùng; step() ném lỗi khi nước đi không hợp lệ (cột đầy, ngoài 1-7, ván đã kết thúc).
-Thêm: legal_actions(), is_terminal(), result(), render() dạng chữ, clone()thay deepcopy, undo().
+Thêm: legal_actions(), is_terminal(), result(), render() dạng chữ, clone() nhẹ thay deepcopy, undo().
 Phụ trách: Nguyễn Trọng Phúc.
 
 Quy ước (giữ đúng như sách):
@@ -22,13 +22,13 @@ class InvalidMoveError(ValueError):
     pass
 
 
-# Số cột có thể thả quân
+# Hai lớp phụ giữ lại từ sách cho giống giao diện môi trường kiểu Gym:
+# action_space.n là số hành động (7 cột), observation_space.shape là kích thước bàn (7, 6).
 class action_space:
     def __init__(self, n):
         self.n = n
 
 
-# Không gian quan sát của bàn cờ 
 class observation_space:
     def __init__(self, row, col):
         self.shape = (row, col)
@@ -39,25 +39,29 @@ class conn():
         self.action_space = action_space(7)
         self.observation_space = observation_space(7, 6)
         self.info = ""
+        # tọa độ tâm 7 cột và 6 hàng trên màn hình turtle, giữ theo sách cho phần vẽ
         self.xs = [-300, -200, -100, 0, 100, 200, 300]
         self.ys = [-250, -150, -50, 50, 150, 250]
-        # Thông tin quân cờ được đánh gần nhất
+        # quân vừa đặt: [cột, hàng, màu], phần vẽ dùng để biết thả quân vào ô nào
         self.game_piece = None
         self.reset()
 
-    # Trả về 1 nước đi ngẫu nhiên
+    # một cột ngẫu nhiên trong các cột còn trống (dùng module random nên đặt seed được)
     def sample(self):
         return choice(self.validinputs)
 
     def reset(self):
         self.turn = "red"
-        # Các cột chưa đầy - có thể đi
+        # các cột chưa đầy, tức các nước còn đi được
         self.validinputs = [1, 2, 3, 4, 5, 6, 7]
+        # occupied[c] là danh sách màu các quân trong cột c, từ dưới lên;
+        # độ dài danh sách chính là chiều cao cột, phần kiểm tra thắng đọc màu từ đây
         self.occupied = [list(), list(), list(), list(), list(), list(), list()]
+        # state là bàn cờ dạng số (1 đỏ, -1 vàng, 0 trống), mạng nơ-ron và render() đọc từ đây
         self.state = np.zeros((7, 6), dtype=int)
         self.done = False
         self.reward = 0
-        # Thêm: lịch sử các cột đã đi, dùng cho undo()
+        # các cột đã đi theo thứ tự, undo() lấy nước cuối từ đây
         self.history = []
         self.game_piece = None
         return self.state
@@ -65,7 +69,8 @@ class conn():
     def _check_move(self, inp):
         if self.done:
             raise InvalidMoveError("Ván đã kết thúc, không thể đi thêm.")
-        # Nhập vào True trả về 1 nên phải đưa vào
+        # True/False cũng được Python coi là số nguyên (True == 1),
+        # nên phải chặn riêng, không thì step(True) sẽ thành đi cột 1
         if isinstance(inp, bool) or not isinstance(inp, Integral):
             raise InvalidMoveError(f"Nước đi phải là số nguyên 1-7, nhận được {inp!r}.")
         if inp < 1 or inp > 7:
@@ -73,38 +78,46 @@ class conn():
         if len(self.occupied[inp - 1]) >= 6:
             raise InvalidMoveError(f"Cột {inp} đã đầy.")
 
-    # step() function: place piece on board and update state
+    # Đi một nước: kiểm tra hợp lệ, đặt quân, rồi xét thắng / hòa / đổi lượt
     def step(self, inp):
         self._check_move(inp)
+        # đổi về int thường (tác tử dùng mạng hay trả về kiểu số của numpy)
         inp = int(inp)
-        self.game_piece = [inp - 1, len(self.occupied[inp - 1]), self.turn] #phục vụ đồ họa
-        self.state[inp - 1][len(self.occupied[inp - 1])] = 2 * (self.turn == "red") - 1 #phục vụ tốc độ Engine 
-        self.occupied[inp - 1].append(self.turn) #phục vụ mạng nơ ron
+        # quân rơi xuống ô trống thấp nhất của cột, tức hàng = chiều cao hiện tại của cột
+        self.game_piece = [inp - 1, len(self.occupied[inp - 1]), self.turn]
+        # (self.turn == "red") là True/False, nhân 2 trừ 1 ra 1 cho đỏ, -1 cho vàng
+        self.state[inp - 1][len(self.occupied[inp - 1])] = 2 * (self.turn == "red") - 1
+        self.occupied[inp - 1].append(self.turn)
         self.history.append(inp)
 
-        # Cập nhật danh sách nước đi hợp lệ
+        # cột vừa đủ 6 quân thì không đi vào được nữa
         if len(self.occupied[inp - 1]) == 6 and inp in self.validinputs:
             self.validinputs.remove(inp)
-        # Kiểm tra có ai thắng không?
+        # chỉ người vừa đi mới có thể vừa thắng, và chỉ cần xét quanh quân vừa đặt
         if self.win_game(inp) == True:
             self.done = True
-            # red thắng -> +1, yellow thắng -> -1
+            # reward luôn theo góc bên đỏ: đỏ thắng 1, vàng thắng -1
             self.reward = 2 * (self.turn == "red") - 1
             self.validinputs = []
-        # Không còn nước đi hợp lệ -> hòa 
+        # không ai thắng mà bàn đã kín 42 ô thì hòa
         elif len(self.validinputs) == 0:
             self.done = True
             self.reward = 0
         else:
-            # Đổi lượt chơi
+            # ván chưa xong thì đổi lượt; ván xong thì giữ nguyên lượt như sách
             if self.turn == "red":
                 self.turn = "yellow"
             else:
                 self.turn = "red"
         return self.state, self.reward, self.done, self.info
 
-    # Thắng theo các hướng 
-    # Thắng theo hàng ngang, 4 ô liên tiếp
+    # Bốn hàm dưới xét đường 4 quân đi qua ô (x, y) vừa đặt, mỗi hàm một hướng.
+    # Mỗi hàm trượt một khung 4 ô qua các vị trí có chứa ô (x, y) (dif = -3..0).
+    # occupied lưu quân theo từng cột nên ô trống (cột chưa cao tới) hay ô ngoài bàn
+    # đều gây IndexError, coi như không thắng. Riêng chỉ số âm thì Python không báo lỗi
+    # mà lấy ngược từ cuối list, nên phải kiểm tra thêm chỉ số >= 0.
+
+    # hàng ngang
     def horizontal4(self, x, y):
         win = False
         for dif in (-3, -2, -1, 0):
@@ -119,7 +132,7 @@ class conn():
                 pass
         return win
 
-    # Thắng theo hàng dọc, 4 ô liên tiếp
+    # hàng dọc: chỉ cần nhìn xuống dưới, vì quân vừa đặt luôn nằm trên cùng của cột
     def vertical4(self, x, y):
         win = False
         try:
@@ -133,7 +146,7 @@ class conn():
             pass
         return win
 
-    # Thắng theo chéo xuôi /, 4 ô liên tiếp
+    # chéo / (lên sang phải)
     def forward4(self, x, y):
         win = False
         for dif in (-3, -2, -1, 0):
@@ -148,7 +161,7 @@ class conn():
                 pass
         return win
 
-    # Thắn theo chéo ngược \, 4 ô liên tiếp 
+    # chéo \ (xuống sang phải)
     def back4(self, x, y):
         win = False
         for dif in (-3, -2, -1, 0):
@@ -163,12 +176,12 @@ class conn():
                 pass
         return win
 
-    # Define a win_game() function to check if someone wins the game
+    # Người vừa đi (self.turn) có thắng nhờ quân vừa đặt ở cột inp không
     def win_game(self, inp):
         win = False
         x = inp - 1
+        # y là hàng của quân vừa đặt, tức quân trên cùng của cột
         y = len(self.occupied[inp - 1]) - 1
-        # Check all winning possibilities
         if self.vertical4(x, y) == True:
             win = True
         if self.horizontal4(x, y) == True:
@@ -222,6 +235,12 @@ class conn():
         return "\n".join(lines)
 
     def clone(self):
+        """Bản sao để tác tử đi thử nước mà không đụng vào ván thật.
+
+        Chỉ chép những thứ thay đổi trong ván (lượt, cột trống, quân, bàn số, lịch sử).
+        Nhanh hơn deepcopy của sách nhiều lần, quan trọng vì MCTS gọi hàm này hàng nghìn lần mỗi nước.
+        """
+        # __new__ tạo đối tượng trống, không chạy __init__ (khỏi dựng bàn mới rồi lại ghi đè)
         new_env = conn.__new__(conn)
         new_env.action_space = self.action_space
         new_env.observation_space = self.observation_space
@@ -231,6 +250,8 @@ class conn():
         new_env.game_piece = None
         new_env.turn = self.turn
         new_env.validinputs = list(self.validinputs)
+        # mỗi cột là một list riêng, phải chép từng cột; chép cả list ngoài thôi thì
+        # bản sao và bản gốc vẫn dùng chung các cột bên trong
         new_env.occupied = []
         for column in self.occupied:
             new_env.occupied.append(list(column))
