@@ -28,25 +28,52 @@ Cấu hình máy dùng cho thực nghiệm: (điền CPU, RAM, hệ điều hàn
 
 Chọn cấp độ AI (1-7) cho từng bên; chơi người–máy hoặc máy–máy.
 
-## 4. Huấn luyện
+## 4. Chạy thí nghiệm và huấn luyện
 
-Chạy theo thứ tự (mỗi bước lưu kết quả vào files/):
+Mọi thí nghiệm nằm trong 6 notebook ở thư mục gốc, chạy bằng Jupyter từ thư mục `final_connect_four`.
+Ô đầu mỗi notebook có biến `QUICK`:
 
-1. Sinh dữ liệu cấp 5: notebook nb3_cap5_policy.ipynb, phần 1 (lệnh: điền)
-2. Huấn luyện cấp 5: nb3_cap5_policy.ipynb, phần 2 → files/(tên mô hình).keras
-3. Huấn luyện cấp 6: nb4_cap6_rq2.ipynb → files/(tên checkpoint).keras
-4. Mạng value cho cấp 7: (điền)
+- `QUICK = True`: chạy thử rất nhanh (vài ván, vài epoch) để kiểm tra code; kết quả ghi vào các
+  thư mục con `thu_nhanh/` và không dùng cho báo cáo.
+- `QUICK = False`: chạy thật theo `config.yaml`.
 
-Ghi lại seed, số ván, số episode, thời gian huấn luyện cho từng bước.
+Log thô ghi dần vào `results/logs/`; bị ngắt thì chạy lại ô đó, các ván đã xong được bỏ qua.
+Bảng ghi vào `results/tables/` (CSV), hình vào `results/figures/`.
 
-## 5. Đánh giá
+Thứ tự chạy (notebook sau dùng kết quả của notebook trước):
 
-Toàn bộ tham số nằm trong config.yaml. Log thô ghi vào results/logs/, hình vào results/figures/.
+1. `nb1_engine_cap1_2`: Game API, chạy toàn bộ kiểm thử, cấp 2 đấu cấp 1, thống kê luật của cấp 2.
+2. `nb2_cap3_4_rq1`: tạo bộ thế cờ chiến thuật `files/tactics.json`; RQ1 (cấp 3 và cấp 4 cùng thời gian);
+   ablation bật/tắt cắt tỉa; ablation số mô phỏng MCTS.
+3. `nb3_cap5_policy`: mỗi máy sinh ván chuyên gia với seed riêng (`MACHINE` = phuc / huong / thienphuc,
+   khoảng 1 giây mỗi ván), gộp lại, huấn luyện cấp 5, lưu `files/policy_conn.keras`.
+4. `nb4_cap6_rq2`: huấn luyện cấp 6 hai giai đoạn (đấu cấp 5, rồi tự chơi với checkpoint cũ),
+   lưu `files/pg_conn.keras`; RQ2.
+5. `nb5_cap7_rq3`: huấn luyện mạng value `files/value_conn.keras`; bốn cấu hình ablation của cấp 7; RQ3.
+6. `nb6_giai_dau_tong_hop`: giải vòng tròn cấp 1-7, ma trận đối đầu, ảnh hưởng bên đi trước, thời gian mỗi nước.
 
-- RQ1 và hai ablation: nb2_cap3_4_rq1.ipynb
-- RQ2: nb4_cap6_rq2.ipynb
-- RQ3: nb5_cap7_rq3.ipynb
-- Giải vòng tròn cấp 1-7: nb6_giai_dau_tong_hop.ipynb
+Dùng trực tiếp trong Python:
+
+    from utils.arena import load_config, build_agent, run_match, format_summary
+    cfg = load_config()
+    a = build_agent(cfg["agents"]["cap3"], overrides={"time_limit": 0.5})
+    b = build_agent(cfg["agents"]["cap4"], overrides={"time_limit": 0.5})
+    s = run_match(a, b, "cap3", "cap4", n_games=200, seed=1, log_path="results/logs/rq1.jsonl")
+    print(format_summary(s))
+
+## 5. Các tác tử
+
+| Cấp | Tác tử | File | Hàm |
+|---|---|---|---|
+| 1 | Ngẫu nhiên | utils/rules.py | `conn_random(env)` |
+| 2 | Luật heuristic | utils/rules.py | `conn_think3(env)` |
+| 3 | Minimax Alpha-Beta | utils/alphabeta.py | `MiniMax_conn(env, depth=3)` |
+| 4 | MCTS/UCT dạng cây | utils/mcts_uct.py | `mcts_uct(env, num_simulations=400)` |
+| 5 | Mạng policy học có giám sát | utils/policy_net.py | `policy_move(env, model)` |
+| 6 | Policy gradient (REINFORCE) | utils/policy_gradient.py | `pg_move(env, model)` |
+| 7 | PUCT + mạng policy, value | utils/alphago_tree.py | `alphago_tree(env, prior, value, fast)` |
+
+Mọi tác tử nhận `env` và trả về một cột 1-7, không làm thay đổi `env`.
 
 ## 6. Cấu trúc thư mục
 
@@ -54,7 +81,7 @@ Toàn bộ tham số nằm trong config.yaml. Log thô ghi vào results/logs/, h
 - nb1 … nb6: notebook chạy thí nghiệm, tạo bảng và hình
 - tests/: kiểm thử tự động
 - files/: mô hình .keras (đẩy lên git) và dữ liệu thô (không đẩy, tạo lại được)
-- results/: log thô và hình
+- results/: log thô (logs/), bảng (tables/) và hình (figures/)
 - docs/: hướng dẫn nhóm, báo cáo, slide, poster
 - tham_khao_sach/: bản gốc mã sách để đối chiếu
 

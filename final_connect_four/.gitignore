@@ -13,3 +13,8 @@ files/*.npz
 # Mô hình .keras và log thô trong results/logs ĐƯỢC đẩy lên git vì đề bắt buộc nộp
 # File tạm của Word, PowerPoint
 ~$*
+
+# Kết quả chạy thử nhanh của notebook (QUICK = True), không dùng cho báo cáo
+thu_nhanh/
+# Checkpoint trung gian của cấp 6
+files/pg_checkpoints/

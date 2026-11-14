@@ -21,6 +21,9 @@ Viết tắt: **P** = Nguyễn Trọng Phúc, **H** = Trần Quỳnh Hương, **
 
 - Giữ quy ước của sách: cột đánh số **1–7**; `env.state` là mảng **(7, 6)** theo cột; lượt đi là `"red"` (đi trước) và `"yellow"`; `reward` = +1 nếu đỏ thắng, −1 nếu vàng thắng, 0 nếu hòa.
 - Mọi tác tử là **một hàm nhận `env` và trả về một cột hợp lệ (1–7)**, giống sách (ví dụ `conn_think3(env)`, `MiniMax_conn(env, depth)`). Tham số thêm (độ sâu, số mô phỏng, mạng) đặt sau `env`. Tác tử không được làm thay đổi `env`; muốn thử nước thì dùng `env.clone()`.
+- Tên hàm tác tử mà giải đấu (`utils/arena.py`, hàm `build_agent`) đang gọi: cấp 1 `rules.conn_random(env)`, cấp 2 `rules.conn_think3(env)`, cấp 3 `alphabeta.MiniMax_conn(env, depth=...)`, cấp 4 `mcts_uct.mcts_uct(env, ...)`, cấp 5 `policy_net.policy_move(env, model)`, cấp 6 `policy_gradient.pg_move(env, model)`, cấp 7 `alphago_tree.alphago_tree(env, ...)`. Muốn đổi tên hàm hay thêm tham số thì báo P để sửa `build_agent` và `config.yaml`.
+- File tác tử nào muốn giải đấu ghi lại số nút/số mô phỏng thì khai báo biến toàn cục `LAST_INFO = {}` và gán dict mới sau mỗi nước, ví dụ `LAST_INFO = {"nodes": 1234, "depth": 4}` (xem `mcts_uct.py`).
+- Engine báo lỗi `InvalidMoveError` khi đi nước sai, kể cả đi tiếp sau khi ván đã kết thúc. Giải đấu đưa cho tác tử một bản sao của bàn cờ và xử thua tác tử nào trả về nước sai.
 - Ngẫu nhiên phải có seed để chạy lại ra cùng kết quả.
 - Mạng dùng Keras 3 (đi kèm TensorFlow 2.21). Mã sách viết cho Keras 2 nên khi chép sang phải sửa: `tf.concat` khi dựng mạng (ch15) đổi thành `layers.Concatenate`; lớp đầu dùng `keras.Input(shape=(7, 6, 1))` thay cho tham số `input_shape=`; lưu mô hình đuôi `.keras`; import kiểu `import keras`, `from keras import layers`. Mọi hàm dựng, lưu, nạp mạng nằm trong `utils/nets.py`, không tự dựng mạng ở file khác.
 - Đầu mỗi file kế thừa ghi Kế thừa / Sửa / Thêm. Mỗi lỗi của sách đã sửa phải có một test chứng minh.
@@ -44,24 +47,27 @@ Viết tắt: **P** = Nguyễn Trọng Phúc, **H** = Trần Quỳnh Hương, **
 
 ### Hạ tầng và hàm phục vụ (P)
 
-- `utils/conn_simple_env.py` (**P**, 11/11): engine. Đã có mã sách. Thêm `legal_actions()`, `is_terminal()`, `result()`, `render()` dạng chữ, `clone()`, `undo()`, báo lỗi khi đi nước sai. **Mọi file khác dùng file này.**
-- `tests/test_env.py` (**P**, 11/11): test thắng ngang/dọc/chéo, hòa, nước sai, undo, clone, perft.
-- `utils/mcts_tree.py` (**P**, 12/11): lõi tìm kiếm cây dùng chung (nút cây, vòng lặp select/expand/simulate/backpropagate, chế độ số mô phỏng và chế độ thời gian). Cách chọn nhánh và cách đánh giá lá được truyền vào, dùng cho cấp 4 và cấp 7.
-- `utils/arena.py`, `config.yaml`, `tests/test_arena.py` (**P**, 13/11): chơi một ván, giải vòng tròn đổi bên, nhiều seed, hai chế độ ngân sách, log JSONL, thống kê (thắng/hòa/thua, score, Wilson 95%, thời gian TB và p95, số nút/mô phỏng, ma trận đối đầu, ảnh hưởng bên đi trước). **T và H dùng file này để chạy RQ.**
-- `utils/data.py` (**P**, 14/11): sinh ván chuyên gia bằng cấp 3 và 4, chia train/val/test theo ván, loại thế trùng, lưu vào `files/`. Cả 3 máy chạy sinh ván đêm 14/11.
-- `utils/nets.py` (**P**, 15/11): mã hóa trạng thái cho mạng; hàm tạo các mạng của sách (policy, policy gradient, value); hàm huấn luyện có đánh giá validation và test; lưu, nạp mô hình; ghi đường cong học, thời gian huấn luyện và cấu hình máy.
-- `utils/conn_env.py`, `play.py` (**P**, 17/11): demo chọn cấp 1–7 cho mỗi bên, chơi người–máy hoặc máy–máy, dùng bàn cờ turtle của sách.
+- `utils/conn_simple_env.py` (**P**, 11/11, đã xong): engine. Đã có mã sách. Thêm `legal_actions()`, `is_terminal()`, `result()`, `render()` dạng chữ, `clone()`, `undo()`, báo lỗi khi đi nước sai. **Mọi file khác dùng file này.**
+- `tests/test_env.py` (**P**, 11/11, đã xong): test thắng ngang/dọc/chéo, hòa, nước sai, undo, clone, perft.
+- `tests/conftest.py` (**P**, đã xong): bộ kiểm tra thắng độc lập và **các hàm kiểm tra tác tử dùng chung**: `check_takes_win`, `check_blocks`, `check_never_illegal`, `check_reproducible`. H và T chỉ cần gọi các hàm này cho tác tử của mình trong `tests/test_agents.py` (xem phần cấp 4 làm mẫu).
+- `tests/test_data_nets.py` (**P**, đã xong): test sinh dữ liệu, chia theo ván, mã hóa, mạng, lưu nạp.
+- `utils/mcts_tree.py` (**P**, 12/11, đã xong): lõi tìm kiếm cây dùng chung (nút cây, vòng lặp select/expand/simulate/backpropagate, chế độ số mô phỏng và chế độ thời gian). Cách chọn nhánh và cách đánh giá lá được truyền vào, dùng cho cấp 4 và cấp 7.
+- `utils/arena.py`, `config.yaml`, `tests/test_arena.py` (**P**, 13/11, đã xong): chơi một ván, giải vòng tròn đổi bên, nhiều seed, hai chế độ ngân sách, log JSONL, thống kê (thắng/hòa/thua, score, Wilson 95%, thời gian TB và p95, số nút/mô phỏng, ma trận đối đầu, ảnh hưởng bên đi trước). **T và H dùng file này để chạy RQ.**
+- `utils/data.py` (**P**, 14/11, đã xong code): sinh ván chuyên gia bằng cấp 3 và 4, chia train/val/test theo ván, loại thế trùng, lưu vào `files/`. Mỗi ván mất khoảng 1 giây, nên 3.000 ván chỉ mất chừng 1 giờ trên một máy. Chạy lại sau khi T sửa xong cấp 3 (13/11).
+- `utils/nets.py` (**P**, 15/11, đã xong code): mã hóa trạng thái cho mạng; hàm tạo các mạng của sách (policy, policy gradient, value); hàm huấn luyện có đánh giá validation và test; lưu, nạp mô hình; ghi đường cong học, thời gian huấn luyện và cấu hình máy. Hàm H dùng nhiều nhất: `nets.move_probabilities(env, model)` trả về xác suất các cột hợp lệ (tự nhận mạng một hay hai đầu vào), `nets.build_policy_net()`, `nets.build_pg_net()`, `nets.train_model(...)`, `nets.save_model(...)`, `nets.load_model(...)`.
+- **Mạng value cho cấp 7** (**P**, 16/11): P tự huấn luyện trên ván của `data.py` (nhãn là kết quả ván), lưu `files/value_conn.keras`, nên cấp 7 không phải chờ cấp 6.
+- `play.py` (**P**, 17/11, đã xong code): demo chọn cấp 1–7 cho mỗi bên, chơi người–máy hoặc máy–máy, vẽ bàn cờ bằng turtle theo cách của sách, luật chơi dùng `conn_simple_env`.
 - `README.md` (**P**): điền lệnh cài đặt, huấn luyện, đánh giá, demo khi có code.
 
 ### Tác tử và việc của từng người
 
-- `utils/rules.py` (**T**, 12/11): cấp 1 `conn_random`, cấp 2 `conn_think3`. Đã có mã sách. Sửa `to_avoid` (chỉ đúng cho bên đỏ), thêm seed, ghi thứ tự ưu tiên luật và cách xử lý xung đột luật trong docstring.
-- `utils/alphabeta.py` (**T**, 13/11): cấp 3. Đã có mã sách. Thêm hàm lượng giá khi chạm độ sâu, cờ `prune` bật/tắt cắt tỉa, đếm số nút, chế độ giới hạn thời gian.
+- `utils/rules.py` (**T**, 12/11): cấp 1 `conn_random`, cấp 2 `conn_think3`. Tự viết lại dựa trên mã sách ở `tham_khao_sach/utils/ch03util.py`, dùng engine `utils.conn_simple_env`. Sửa `to_avoid` (chỉ đúng cho bên đỏ), thêm seed, ghi thứ tự ưu tiên luật và cách xử lý xung đột luật trong docstring. Lưu ý: vòng lặp nhìn trước 2 nước trong `conn_think2/3` của sách đi tiếp `m2` cả khi `m1` đã làm ván kết thúc; engine mới sẽ báo lỗi ở đó, cần kiểm tra `done` trước khi đi `m2`.
+- `utils/alphabeta.py` (**T**, 13/11): cấp 3. Đã có mã sách. Thêm hàm lượng giá khi chạm độ sâu, cờ `prune` bật/tắt cắt tỉa, đếm số nút, chế độ giới hạn thời gian. Đã thử: bản gốc của sách ở độ sâu 2 vẫn thua tác tử ngẫu nhiên 2/6 ván, vì chạm độ sâu là trả 0 (coi như hòa), nên hàm lượng giá là việc quan trọng nhất.
 - `utils/tactics.py` (**T**, 16/11): khoảng 40 thế cờ chiến thuật (thắng ngay, buộc chặn, tạo đôi đe dọa), nhãn bằng Alpha-Beta tìm sâu, lưu `files/tactics.json`, hàm chấm độ chính xác theo nhóm cho tác tử bất kỳ.
-- `utils/mcts_uct.py` (**P**, 13/11): cấp 4. Cắm công thức UCT và mô phỏng ngẫu nhiên vào lõi `mcts_tree.py`. Không thêm luật thắng/chặn.
-- `utils/policy_net.py` (**H**, 16/11): cấp 5. Hàm tác tử chọn nước bằng mạng policy; huấn luyện chạy trong `nb3` bằng hàm của `nets.py` và dữ liệu của `data.py`. Trước khi có dữ liệu thật (15/11) thì đọc ch11, ch15 và thử trên ván của `conn_random`.
-- `utils/policy_gradient.py` (**H**, 16/11 đến 18/11): cấp 6, theo REINFORCE của sách (ch15). Giai đoạn 1 đấu với mô hình cấp 5, giai đoạn 2 tự chơi với các checkpoint cũ. Lưu ít nhất 5 checkpoint và đường cong học.
-- `utils/alphago_tree.py` (**P**, 17/11): cấp 7, PUCT trên lõi cây, dùng mạng policy, policy nhanh và value.
+- `utils/mcts_uct.py` (**P**, 13/11, đã xong): cấp 4. Cắm công thức UCT và mô phỏng ngẫu nhiên vào lõi `mcts_tree.py`. Không thêm luật thắng/chặn.
+- `utils/policy_net.py` (**H**, 16/11): cấp 5. Hàm tác tử `policy_move(env, model)` chọn nước bằng mạng policy (dùng `nets.move_probabilities`); huấn luyện chạy trong `nb3` bằng hàm của `nets.py` và dữ liệu của `data.py`. Trước khi có dữ liệu thật (15/11) thì đọc ch11, ch15 và thử trên ván của `conn_random`.
+- `utils/policy_gradient.py` (**H**, 16/11 đến 18/11): cấp 6, theo REINFORCE của sách (ch15), mạng tạo bằng `nets.build_pg_net()`, tác tử `pg_move(env, model)`. Giai đoạn 1 đấu với mô hình cấp 5, giai đoạn 2 tự chơi với các checkpoint cũ. Lưu ít nhất 5 checkpoint và đường cong học.
+- `utils/alphago_tree.py` (**P**, 17/11, đã xong code, chờ mô hình thật): cấp 7, PUCT trên lõi cây, dùng mạng policy (cấp 5 của H) làm tiên nghiệm và mô phỏng nhanh, mạng value của P. Khi cấp 6 xong thì thử đổi tiên nghiệm sang mạng cấp 6.
 - `tests/test_agents.py` (**người viết cấp nào thêm test cấp đó**): thắng ngay, chặn, không đi nước sai, chạy lại cùng seed ra cùng kết quả.
 
 ## 5. Notebook: ai chạy cái nào
@@ -110,7 +116,7 @@ Người chủ RQ chạy thí nghiệm bằng `arena.py` và `tactics.py`, phân
 - 11/11: engine, test (P); bắt đầu cấp 1–2 và cấp 3 trên mã sách (T); H đọc ch11, ch15 và chuẩn bị mạng.
 - 12/11: lõi cây (P); cấp 1–2 xong (T).
 - 13/11: cấp 4 xong (P); giải đấu (P); cấp 3 xong (T).
-- 14/11: P viết data.py,  báo cáo tiến độ (cấp 1–4 xong).
+- 14/11: P sinh dữ liệu bằng data.py (khoảng 1 giờ cho 3.000 ván); báo cáo tiến độ (cấp 1–4 xong).
 - 15/11: hàm mạng (P); huấn luyện cấp 5 (H); T chạy RQ1 + 2 ablation và làm bộ thế cờ.
 - 16/11: cấp 5 xong (H); bộ thế cờ xong (T); bắt đầu cấp 6 (H) và cấp 7 (P).
 - 17/11: cấp 7 xong (P); demo xong (P); RQ1 xong (T).
