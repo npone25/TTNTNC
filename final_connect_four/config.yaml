@@ -1,2 +1,95 @@
 # Cấu hình thí nghiệm: tham số từng cấp, ngân sách tính toán, số ván, seed.
-# Phụ trách: Nguyễn Trọng Phúc; H và T thêm tham số cho cấp của mình. Mọi bảng và hình trong báo cáo phải chạy lại được từ file này.
+# Phụ trách: Nguyễn Trọng Phúc; H và T thêm tham số cho cấp của mình.
+# Mọi bảng và hình trong báo cáo phải chạy lại được từ file này.
+# Tạo tác tử: utils.arena.build_agent(cfg["agents"]["cap3"]); chế độ thời gian: overrides={"time_limit": 0.5}
+
+seed: 2026
+log_dir: results/logs
+
+agents:
+  random:
+    type: random
+  cap1:
+    type: cap1                     # rules.conn_random (T)
+  cap2:
+    type: cap2                     # rules.conn_think3 (T)
+  cap3:
+    type: cap3                     # alphabeta.MiniMax_conn (T); T đổi tham số khi thêm prune, time_limit
+    params: {depth: 3}
+  cap4:
+    type: cap4                     # mcts_uct.mcts_uct (P)
+    params: {num_simulations: 400, temperature: 1.4}
+  cap5:
+    type: cap5                     # policy_net.policy_move(env, model) (H)
+    model: files/policy_conn.keras
+  cap6:
+    type: cap6                     # policy_gradient.pg_move(env, model) (H)
+    model: files/pg_conn.keras
+  cap7:
+    type: cap7                     # alphago_tree.alphago_tree (P)
+    prior_model: files/policy_conn.keras   # đổi sang files/pg_conn.keras khi cấp 6 xong để thử
+    value_model: files/value_conn.keras
+    fast_model: files/policy_conn.keras
+    params: {num_simulations: 200, c_puct: 1.5, mix: 0.5, rollout_depth: 10}
+
+# Giải vòng tròn cấp 1-7 (nb6)
+tournament:
+  agents: [cap1, cap2, cap3, cap4, cap5, cap6, cap7]
+  games_per_pair: 200
+
+# RQ1: cấp 3 với cấp 4 ở cùng thời gian mỗi nước (nb2)
+rq1:
+  time_limits: [0.2, 0.5, 1.0]
+  games_per_pair: 200
+
+# Hai ablation bắt buộc (nb2)
+ablation_pruning:
+  depths: [2, 3, 4, 5]
+  positions: 50
+ablation_mcts_simulations:
+  simulations: [25, 50, 100, 200, 400, 800, 1600]
+  opponent: cap2
+  games_per_pair: 100
+
+# RQ3: cấp 7 so với cấp 4 và cấp 5 (nb5)
+rq3:
+  simulations: [50, 200, 800]
+  time_limits: [0.2, 0.5, 1.0]
+  games_per_pair: 200
+  opponent: cap3
+
+# RQ3: bốn cấu hình ablation của cấp 7 (cùng hàm alphago_tree, chỉ khác hai công tắc)
+rq3_ablation:
+  mcts_thuan:
+    type: cap7
+    params: {num_simulations: 200, use_prior: false, use_value: false}
+  them_prior:
+    type: cap7
+    prior_model: files/policy_conn.keras
+    params: {num_simulations: 200, use_prior: true, use_value: false}
+  them_value:
+    type: cap7
+    value_model: files/value_conn.keras
+    params: {num_simulations: 200, use_prior: false, use_value: true, mix: 0.0}
+  day_du:
+    type: cap7
+    prior_model: files/policy_conn.keras
+    value_model: files/value_conn.keras
+    params: {num_simulations: 200, use_prior: true, use_value: true, mix: 0.0}
+
+# Sinh dữ liệu cấp 5 (utils/data.py). Mỗi máy chạy một phần với seed khác nhau rồi gộp.
+data:
+  games_per_machine: 1000
+  minimax_depth: 3
+  mcts_simulations: 1000
+  seeds: {phuc: 1, huong: 2, thienphuc: 3}
+
+# Huấn luyện (utils/nets.py)
+train_policy:
+  epochs: 30
+  batch_size: 128
+  learning_rate: 0.001
+train_value:
+  epochs: 30
+  batch_size: 128
+  learning_rate: 0.0005
