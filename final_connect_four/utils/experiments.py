@@ -3,7 +3,8 @@
 Kế thừa: không (tự viết).
 Sửa: không áp dụng.
 Thêm: chế độ chạy thử nhanh (QUICK) ghi ra thư mục riêng để không lẫn với kết quả thật;
-      đổi đường dẫn mô hình theo chế độ; bảng kết quả dạng pandas; vẽ hình score kèm khoảng tin cậy và ma trận đối đầu.
+      đổi đường dẫn mô hình theo chế độ; bảng kết quả dạng pandas; vẽ hình score kèm khoảng tin cậy và ma trận đối đầu;
+      khai cuộc ngẫu nhiên có seed cho các cặp có tác tử tất định; đo thời gian mỗi nước bỏ qua nước khai cuộc.
 Phụ trách: Nguyễn Trọng Phúc.
 
 Mỗi notebook mở đầu bằng:
@@ -17,12 +18,13 @@ lần cũng không đè lên kết quả thật.
 
 import copy
 import os
+import random
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from utils.arena import load_config, build_agent, read_log
+from utils.arena import load_config, build_agent, read_log, as_agent, time_stats
 
 # Tên hiển thị của từng cấp trong bảng và hình
 LEVEL_LABELS = {
@@ -193,3 +195,48 @@ def matrix_table(matrix, names):
                 column.append(round(matrix[a][b], 3))
         data[LEVEL_LABELS.get(b, b)] = column
     return pd.DataFrame(data, index=[LEVEL_LABELS.get(a, a) for a in names])
+
+
+def with_random_opening(agent, n_moves=2):
+    """Bọc tác tử: n_moves nước đầu tiên của VÁN (tính cả hai bên) đi ngẫu nhiên.
+
+    play_game đặt seed trước mỗi ván nên khai cuộc ngẫu nhiên vẫn tái lập được.
+    Cần cho các cặp có tác tử tất định (cấp 5, 6 luôn đi cột xác suất cao nhất):
+    không có khai cuộc ngẫu nhiên thì 200 ván chỉ là 2 ván lặp lại.
+    Nước khai cuộc ghi {"opening": True} trong move_info.
+    """
+    move_fn, info_fn = as_agent(agent)
+    last = {"opening": False}
+
+    def opening_agent(env):
+        if len(env.history) < n_moves:
+            last["opening"] = True
+            return random.choice(env.validinputs)
+        last["opening"] = False
+        return move_fn(env)
+
+    def opening_info():
+        if last["opening"]:
+            return {"opening": True}
+        return info_fn()
+
+    return (opening_agent, opening_info)
+
+
+def move_times_of(records, agent_name, skip_opening=True):
+    """Thời gian các nước của agent_name trong các bản ghi, bỏ nước khai cuộc ngẫu nhiên nếu cần.
+
+    Trả về (trung bình, p95) theo giây.
+    """
+    times = []
+    for r in records:
+        color = "red" if r["red"] == agent_name else "yellow"
+        infos = r.get("move_info", [])
+        for i, t in enumerate(r["move_times"]):
+            mover = "red" if i % 2 == 0 else "yellow"
+            if mover != color:
+                continue
+            if skip_opening and i < len(infos) and infos[i].get("opening"):
+                continue
+            times.append(t)
+    return time_stats(times)
