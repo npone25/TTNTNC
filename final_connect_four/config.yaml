@@ -36,27 +36,57 @@ agents:
 tournament:
   agents: [cap1, cap2, cap3, cap4, cap5, cap6, cap7]
   games_per_pair: 200
+  seed: 0
+  # mỗi ván mở đầu bằng 2 nước ngẫu nhiên có seed (đỏ 1, vàng 1), để các tác tử tất định
+  # (cấp 5, 6 luôn đi cột xác suất cao nhất) không lặp lại cùng một ván suốt 200 ván
+  opening_random_moves: 2
 
 # RQ1: cấp 3 với cấp 4 ở cùng thời gian mỗi nước (nb2)
 rq1:
   time_limits: [0.2, 0.5, 1.0]
   games_per_pair: 200
+  seed: 100
 
 # Hai ablation bắt buộc (nb2)
 ablation_pruning:
   depths: [2, 3, 4, 5]
   positions: 50
+  seed: 50
 ablation_mcts_simulations:
   simulations: [25, 50, 100, 200, 400, 800, 1600]
   opponent: cap2
   games_per_pair: 100
+  seed: 200
+
+# Phân tích độ nhạy hàm lượng giá của cấp 3 (nb2). Seed riêng, không dùng ván của giải đấu cuối.
+ablation_eval:
+  variants: [quan_x_duong_mo, duong_mo, trong_so_5_2_3, khong_luong_gia]
+  opponent: cap2
+  games_per_pair: 100
+  opening_random_moves: 2
+  seed: 300
+
+# RQ2: cấp 6 so với cấp 5 (nb4)
+rq2:
+  opponents: [cap1, cap2, cap3, cap4]
+  games_per_pair: 200
+  opening_random_moves: 2
+  seed: 400
 
 # RQ3: cấp 7 so với cấp 4 và cấp 5 (nb5)
 rq3:
   simulations: [50, 200, 800]
   time_limits: [0.2, 0.5, 1.0]
   games_per_pair: 200
-  opponent: cap3
+  opponent: cap3                 # đối thủ chung cho bốn cấu hình ablation của cấp 7
+  opening_random_moves: 2
+  seed: 500
+
+# Chọn hệ số mix của cấp 7 bằng ván thử riêng (seed riêng), trước khi chạy RQ3 và giải đấu
+mix_pilot:
+  mixes: [0.0, 0.5]
+  games: 40
+  seed: 900
 
 # RQ3: bốn cấu hình ablation của cấp 7 (cùng hàm alphago_tree, chỉ khác hai công tắc)
 rq3_ablation:
@@ -93,3 +123,13 @@ train_value:
   epochs: 30
   batch_size: 128
   learning_rate: 0.0005
+train_pg:
+  stage1_batches: 300
+  stage2_batches: 300
+  games_per_batch: 10
+  gamma: 0.95
+  learning_rate: 0.00025
+  pool_size: 5
+  eval_every: 25
+  checkpoint_every: 50
+  seed: 2026
