@@ -2,7 +2,8 @@
 
 Kế thừa: cách sinh ván ở notebook ch11 mục 1.2 (50% Minimax độ sâu 3, 50% MCTS), sách AlphaGo Simplified (Mark Liu), giấy phép MIT.
 Sửa: giảm số ván cho vừa thời gian; dùng engine và tác tử của nhóm (MCTS cây cấp 4 thay MCTS phẳng của sách).
-Thêm: chia train/val/test theo ván; loại thế cờ trùng và loại thế ở val/test đã có trong train; lưu seed, số ván, thời gian, cấu hình máy; lưu dần để không mất dữ liệu khi bị ngắt.
+Thêm: chia train/val/test theo ván; loại thế cờ trùng và loại thế ở val/test đã có trong train; lưu seed, số ván, thời gian, cấu hình máy; lưu dần để không mất dữ liệu khi bị ngắt;
+      lật gương bàn cờ để nhân đôi tập train (Connect Four đối xứng trái phải).
 Phụ trách: Nguyễn Trọng Phúc.
 
 Quy trình (chạy trong notebook nb3):
@@ -224,10 +225,25 @@ def remove_overlap(X_train, X_other, y_other):
     return X_other[keep], y_other[keep]
 
 
-def make_dataset(games, kind="policy", seed=0, ratios=(0.8, 0.1, 0.1)):
+def mirror_examples(X, y, kind):
+    """Lật gương bàn cờ theo chiều ngang: cột 1 thành cột 7, cột 2 thành cột 6...
+
+    Connect Four đối xứng trái phải nên thế cờ lật vẫn là thế cờ hợp lệ, cùng kết quả.
+    Mạng policy: nước đi cũng lật theo (chỉ số cột c thành 6 - c). Mạng value: nhãn giữ nguyên.
+    """
+    X_flip = X[:, ::-1, :, :].copy()
+    if kind == "policy":
+        y_flip = 6 - y
+    else:
+        y_flip = y.copy()
+    return X_flip, y_flip
+
+
+def make_dataset(games, kind="policy", seed=0, ratios=(0.8, 0.1, 0.1), mirror=False):
     """Tạo tập train/val/test đã chia theo ván và đã loại trùng.
 
     kind = "policy" (cấp 5) hoặc "value" (mạng value cho cấp 7).
+    mirror = True: thêm bản lật gương vào tập TRAIN (val, test giữ nguyên để so sánh công bằng).
     """
     if kind == "policy":
         X, y, ids = policy_examples(games)
@@ -236,13 +252,19 @@ def make_dataset(games, kind="policy", seed=0, ratios=(0.8, 0.1, 0.1)):
     else:
         raise ValueError("kind phải là 'policy' hoặc 'value'")
     split = split_by_game(ids, ratios, seed)
-    X_train, y_train = remove_duplicates(X[split["train"]], y[split["train"]])
+    X_train = X[split["train"]]
+    y_train = y[split["train"]]
+    if mirror:
+        X_flip, y_flip = mirror_examples(X_train, y_train, kind)
+        X_train = np.concatenate([X_train, X_flip])
+        y_train = np.concatenate([y_train, y_flip])
+    X_train, y_train = remove_duplicates(X_train, y_train)
     X_val, y_val = remove_duplicates(X[split["val"]], y[split["val"]])
     X_test, y_test = remove_duplicates(X[split["test"]], y[split["test"]])
     X_val, y_val = remove_overlap(X_train, X_val, y_val)
     X_test, y_test = remove_overlap(X_train, X_test, y_test)
     return {
-        "kind": kind, "seed": seed, "n_games": len(set(ids)),
+        "kind": kind, "seed": seed, "n_games": len(set(ids)), "mirror": mirror,
         "X_train": X_train, "y_train": y_train,
         "X_val": X_val, "y_val": y_val,
         "X_test": X_test, "y_test": y_test,

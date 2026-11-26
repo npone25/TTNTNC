@@ -42,16 +42,18 @@ def policy_move(env, model, sample=False):
 
 
 def train_policy(games, path="files/policy_conn.keras", epochs=30, batch_size=128,
-                 learning_rate=0.001, seed=0, verbose=1):
+                 learning_rate=0.001, seed=0, verbose=1, mirror=False, patience=None):
     """Huấn luyện mạng cấp 5 từ danh sách ván chuyên gia (kết quả của data.generate_games).
 
     Các bước: tạo mẫu (thế cờ, nước của bên thắng), chia train/val/test theo ván,
     huấn luyện, đánh giá trên val và test, lưu mô hình kèm báo cáo.
+    mirror: thêm bản lật gương vào tập train; patience: dừng sớm theo val_loss (xem nets.train_model).
     Trả về (model, report).
     """
-    dataset = data.make_dataset(games, kind="policy", seed=seed)
+    dataset = data.make_dataset(games, kind="policy", seed=seed, mirror=mirror)
     model = nets.build_policy_net(learning_rate=learning_rate)
-    report = nets.train_model(model, dataset, epochs=epochs, batch_size=batch_size, verbose=verbose)
+    report = nets.train_model(model, dataset, epochs=epochs, batch_size=batch_size, verbose=verbose,
+                              patience=patience)
     report["learning_rate"] = learning_rate
     nets.save_model(model, path, report)
     return model, report

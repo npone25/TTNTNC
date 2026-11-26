@@ -2,7 +2,7 @@
 
 Kế thừa: kiến trúc ở notebook ch11 mục 2.1 và ch15 mục 1.1, 2.3, sách AlphaGo Simplified (Mark Liu), giấy phép MIT.
 Sửa: chuyển sang Keras 3 (TensorFlow 2.21): dùng keras.Input thay tham số input_shape; nối hai đầu vào bằng layers.Concatenate thay tf.concat (Keras 3 báo lỗi với tf.concat); lưu đuôi .keras; nhãn dạng số nguyên (sparse) thay one-hot.
-Thêm: đánh giá trên tập validation và test (sách không có); ghi đường cong học, thời gian huấn luyện và cấu hình máy; gọi mạng qua tf.function (nhanh hơn model.predict của sách khoảng 60 lần khi đánh giá từng thế cờ lẻ).
+Thêm: đánh giá trên tập validation và test (sách không có); dừng sớm theo val_loss và lấy lại trọng số tốt nhất; ghi đường cong học, thời gian huấn luyện và cấu hình máy; gọi mạng qua tf.function (nhanh hơn model.predict của sách khoảng 60 lần khi đánh giá từng thế cờ lẻ).
 Phụ trách: Nguyễn Trọng Phúc.
 
 Quy ước đầu vào: bàn cờ nhìn từ phía NGƯỜI SẮP ĐI (quân mình = 1, đối thủ = -1), hình dạng (7, 6, 1).
@@ -165,16 +165,22 @@ def value_estimate(env, value_model):
 
 # Huấn luyện, đánh giá, lưu và nạp
 
-def train_model(model, dataset, epochs=30, batch_size=128, verbose=1):
+def train_model(model, dataset, epochs=30, batch_size=128, verbose=1, patience=None):
     """Huấn luyện mạng trên tập train, theo dõi trên val, đánh giá trên test.
 
     dataset là dict tạo bởi utils.data.make_dataset (hoặc load_dataset).
+    patience: nếu có, dừng sớm khi val_loss không giảm trong patience epoch liền,
+    rồi lấy lại trọng số ở epoch có val_loss thấp nhất (chỉ nhìn val, không nhìn test).
     Trả về dict báo cáo: đường cong học, loss và accuracy trên val/test, số giây huấn luyện.
     """
+    callbacks = []
+    if patience is not None:
+        callbacks.append(keras.callbacks.EarlyStopping(monitor="val_loss", patience=patience,
+                                                       restore_best_weights=True))
     start = time.time()
     history = model.fit(dataset["X_train"], dataset["y_train"],
                         validation_data=(dataset["X_val"], dataset["y_val"]),
-                        epochs=epochs, batch_size=batch_size, verbose=verbose)
+                        epochs=epochs, batch_size=batch_size, verbose=verbose, callbacks=callbacks)
     seconds = time.time() - start
     val_loss, val_acc = model.evaluate(dataset["X_val"], dataset["y_val"], verbose=0)
     test_loss, test_acc = model.evaluate(dataset["X_test"], dataset["y_test"], verbose=0)
@@ -183,18 +189,21 @@ def train_model(model, dataset, epochs=30, batch_size=128, verbose=1):
         curve[key] = []
         for v in values:
             curve[key].append(float(v))
+    # epoch có val_loss thấp nhất (đánh số từ 1), là trọng số được giữ lại khi dừng sớm
+    best_epoch = int(np.argmin(curve["val_loss"])) + 1
     return {
-        "epochs": epochs, "batch_size": batch_size, "train_seconds": round(seconds, 1),
+        "epochs": epochs, "epochs_run": len(curve["loss"]), "best_epoch": best_epoch,
+        "patience": patience, "batch_size": batch_size, "train_seconds": round(seconds, 1),
         "val_loss": float(val_loss), "val_accuracy": float(val_acc),
         "test_loss": float(test_loss), "test_accuracy": float(test_acc),
         "n_train": int(len(dataset["y_train"])), "n_val": int(len(dataset["y_val"])),
-        "n_test": int(len(dataset["y_test"])),
+        "n_test": int(len(dataset["y_test"])), "mirror": bool(dataset.get("mirror", False)),
         "curve": curve,
     }
 
 
 def train_value(games, path="files/value_conn.keras", epochs=30, batch_size=128,
-                learning_rate=0.0005, seed=0, verbose=1):
+                learning_rate=0.0005, seed=0, verbose=1, mirror=False, patience=None):
     """Huấn luyện mạng value cho cấp 7 từ ván chuyên gia (kết quả của data.generate_games).
 
     Nhãn của mỗi thế cờ là kết quả cuối ván nhìn từ người sắp đi (hòa / thắng / thua),
@@ -202,9 +211,10 @@ def train_value(games, path="files/value_conn.keras", epochs=30, batch_size=128,
     Trả về (model, report); mô hình lưu ở path kèm file báo cáo .json.
     """
     from utils import data
-    dataset = data.make_dataset(games, kind="value", seed=seed)
+    dataset = data.make_dataset(games, kind="value", seed=seed, mirror=mirror)
     model = build_value_net(learning_rate=learning_rate)
-    report = train_model(model, dataset, epochs=epochs, batch_size=batch_size, verbose=verbose)
+    report = train_model(model, dataset, epochs=epochs, batch_size=batch_size, verbose=verbose,
+                         patience=patience)
     report["learning_rate"] = learning_rate
     save_model(model, path, report)
     return model, report
