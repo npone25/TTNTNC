@@ -1,5 +1,7 @@
 """Test cấp 1, 2 (rules.py) và cấp 3 (alphabeta.py). Phụ trách: Phạm Thiên Phúc."""
 
+import random
+
 import pytest
 
 from utils.conn_simple_env import conn
@@ -89,7 +91,28 @@ def test_cap3_ham_luong_gia_doi_xung():
     yellow_view = env.clone()
     yellow_view.turn = "yellow"
     assert alphabeta.evaluate(red_view) == pytest.approx(-alphabeta.evaluate(yellow_view))
-    assert -0.9 <= alphabeta.evaluate(red_view) <= 0.9
+    assert -0.75 <= alphabeta.evaluate(red_view) <= 0.75
+
+
+def test_cap3_ham_luong_gia_nho_hon_thang_that():
+    # trên nhiều thế cờ ngẫu nhiên chưa kết thúc, điểm luôn trong [-0.75, 0.75], nhỏ hơn thắng thật (1)
+    rng = random.Random(0)
+    for _ in range(300):
+        env = conn()
+        so_nuoc = rng.randint(0, 30)
+        while not env.done and len(env.history) < so_nuoc:
+            env.step(rng.choice(env.validinputs))
+        if not env.done:
+            assert -0.75 <= alphabeta.evaluate(env) <= 0.75
+
+
+def test_cap3_quan_cot_giua_duoc_diem_cao_hon_cot_bien():
+    # chấm theo góc đỏ: quân đỏ ở cột 4 nằm trong nhiều đường thắng hơn quân đỏ ở cột 1
+    giua = conn.from_moves([4])
+    giua.turn = "red"
+    bien = conn.from_moves([1])
+    bien.turn = "red"
+    assert alphabeta.evaluate(giua) > alphabeta.evaluate(bien)
 
 
 def test_cap3_che_do_thoi_gian():
