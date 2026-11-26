@@ -4,7 +4,7 @@ Kế thừa: notebook ch15 (playing_red, playing_yellow, discount_rs, vòng hu�
 Sửa: chỉ rút nước trong các cột hợp lệ (sách cho rút cả cột đầy rồi phạt -1, tốn nhiều ván vô ích);
      một hàm chơi cho cả hai màu thay cho playing_red/playing_yellow; đối thủ giai đoạn 1 là mô hình cấp 5 do nhóm tự huấn luyện.
 Thêm: giai đoạn 2 tự chơi với các checkpoint cũ của chính nó; lưu checkpoint đều đặn; ghi đường cong học
-      (phần thưởng trung bình mỗi lô và điểm số khi đấu với đối thủ cố định). Mạng tạo bằng nets.build_pg_net().
+      (phần thưởng trung bình mỗi lô và điểm số khi đấu với đối thủ cố định, mỗi ván mở đầu 2 nước ngẫu nhiên có seed). Mạng tạo bằng nets.build_pg_net().
 Phụ trách: Trần Quỳnh Hương.
 
 Ý tưởng REINFORCE:
@@ -136,6 +136,18 @@ def evaluate_against(model, opponent, n_games=20, seed=0):
 
     def agent(env):
         return pg_move(env, model)
+
+    def with_opening(fn):
+        # 2 nước đầu ván đi ngẫu nhiên (play_game đặt seed nên vẫn tái lập được);
+        # không có thì mạng và đối thủ tất định chỉ chơi đi chơi lại đúng 2 ván
+        def wrapped(env):
+            if len(env.history) < 2:
+                return random.choice(env.validinputs)
+            return fn(env)
+        return wrapped
+
+    agent = with_opening(agent)
+    opponent = with_opening(opponent)
 
     points = 0.0
     for g in range(n_games):

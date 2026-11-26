@@ -115,21 +115,30 @@ data:
   seeds: {phuc: 1, huong: 2, thienphuc: 3}
 
 # Huấn luyện (utils/nets.py)
+# epochs là số epoch tối đa; patience: dừng khi val_loss không giảm trong 5 epoch liền,
+# lấy lại trọng số tốt nhất (lần chạy đầu không dừng sớm: val_loss thấp nhất ở epoch 6 rồi tăng)
+# mirror: thêm bản lật gương bàn cờ vào tập train
 train_policy:
   epochs: 30
   batch_size: 128
   learning_rate: 0.001
+  patience: 5
+  mirror: true
 train_value:
   epochs: 30
   batch_size: 128
   learning_rate: 0.0005
+  patience: 5
+  mirror: true
+# lần chạy đầu 300 + 300 lô (khoảng 4 phút): phần thưởng giai đoạn 1 vẫn đang tăng ở lô cuối,
+# tức chưa học xong, nên tăng lên 1500 + 1500 lô
 train_pg:
-  stage1_batches: 300
-  stage2_batches: 300
+  stage1_batches: 1500
+  stage2_batches: 1500
   games_per_batch: 10
   gamma: 0.95
   learning_rate: 0.00025
   pool_size: 5
-  eval_every: 25
-  checkpoint_every: 50
+  eval_every: 100
+  checkpoint_every: 250
   seed: 2026
