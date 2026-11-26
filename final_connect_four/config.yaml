@@ -30,7 +30,7 @@ agents:
     prior_model: files/policy_conn.keras   # đổi sang files/pg_conn.keras khi cấp 6 xong để thử
     value_model: files/value_conn.keras
     fast_model: files/policy_conn.keras
-    params: {num_simulations: 200, c_puct: 1.5, mix: 0.5, rollout_depth: 10}
+    params: {num_simulations: 200, c_puct: 1.5, mix: 0.0, rollout_depth: 10}
 
 # Giải vòng tròn cấp 1-7 (nb6)
 tournament:
