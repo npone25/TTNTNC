@@ -81,3 +81,33 @@ def test_policy_gradient_mang_mot_dau_vao():
               "action": 3, "mask": policy_gradient.legal_mask(env)}]
     loss = policy_gradient.reinforce_update(model, optimizer, steps, [1.0])
     assert np.isfinite(loss)
+
+
+def test_mang_value_hoi_quy_va_nhan_diem_tim_kiem():
+    from utils import nets
+    labeled = [("g0", [1, 2, 1, 2, 1, 3], 1, 1.0),   # đỏ thắng chắc
+               ("g1", [4], 4, 0.02)]                   # điểm lượng giá thường
+    X, y, ids = data.search_score_examples(labeled, scale=10)
+    assert y[0] == 1.0
+    assert abs(y[1] - np.tanh(0.2)) < 1e-6
+    model = nets.build_value_net(regression=True)
+    value = nets.value_estimate(conn(), model)
+    assert -1.0 <= value <= 1.0
+
+
+def test_van_tu_choi_va_the_moi():
+    from utils import nets
+    model = nets.build_policy_net()
+    games = data.self_play_games(model, 2, random_prob=0.5, seed=0)
+    assert len(games) == 2
+    for game in games:
+        env = conn()
+        for state, move, turn in game["history"]:
+            assert move in env.validinputs
+            env.step(move)
+        assert env.done
+    # thế đã có nhãn thì không gán lại
+    first = data.game_positions(games)[:3]
+    known = [(g, m, 4, 0.0) for g, m in first]
+    rest = data.new_positions(games, known)
+    assert len(rest) == len(data.game_positions(games)) - 3

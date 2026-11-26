@@ -196,6 +196,46 @@ def game_positions(games):
     return result
 
 
+def self_play_games(policy_model, n_games, random_prob=0.1, seed=0, prefix="tc"):
+    """Ván tự chơi của mạng policy cấp 5 để lấy thêm thế cờ cho mạng value (phiên bản 2).
+
+    Mỗi nước: xác suất random_prob đi một cột ngẫu nhiên, còn lại rút theo xác suất của mạng.
+    Giống cách AlphaGo tạo dữ liệu cho mạng value (ván tự chơi có chèn nước ngẫu nhiên): thế cờ đa dạng
+    hơn ván chuyên gia, có cả thế sau một nước sai, là loại thế mà cây tìm kiếm của cấp 7 hay gặp.
+    Trả về danh sách ván cùng dạng generate_games (game_id bắt đầu bằng prefix).
+    """
+    from utils import nets
+    rng = random.Random(seed)
+    games = []
+    for k in range(n_games):
+        env = conn()
+        history = []
+        while not env.done:
+            if rng.random() < random_prob:
+                move = rng.choice(env.validinputs)
+            else:
+                probs = nets.move_probabilities(env, policy_model)
+                move = rng.choices(list(probs.keys()), weights=list(probs.values()))[0]
+            history.append((env.state.copy(), move, env.turn))
+            env.step(move)
+        games.append({"game_id": f"{prefix}_g{k}", "reward": env.reward, "history": history})
+    return games
+
+
+def new_positions(games, labeled):
+    """Các thế cờ trong games (bỏ trùng) chưa có trong labeled, để chỉ gán nhãn phần mới."""
+    known = set()
+    for game_id, moves, label, best in labeled:
+        env = conn.from_moves(moves)
+        known.add(to_player_view(env.state, env.turn).tobytes())
+    result = []
+    for game_id, moves in game_positions(games):
+        env = conn.from_moves(moves)
+        if to_player_view(env.state, env.turn).tobytes() not in known:
+            result.append((game_id, moves))
+    return result
+
+
 def label_with_search(moves, depth):
     """Nhãn của một thế cờ bằng Alpha-Beta tìm sâu depth (cùng hàm tìm kiếm của cấp 3).
 
@@ -266,6 +306,60 @@ def search_policy_examples(labeled):
     return np.array(X, dtype=np.float32), np.array(y, dtype=np.int64), ids
 
 
+def fit_score_scale(games, labeled, seed=0, ratios=(0.8, 0.1, 0.1), candidates=(1, 2, 5, 10, 20, 50, 100)):
+    """Chọn hệ số k để đổi điểm lượng giá của Alpha-Beta sang thang kết quả ván: tanh(k × điểm).
+
+    Điểm lượng giá có thang tùy ý (chia 276 chỉ để nhỏ hơn điểm thắng 1), phần lớn chỉ trong
+    khoảng ±0,07 nên gần như bằng 0 so với thắng thua. Mỗi k được đo bằng sai số bình phương giữa
+    tanh(k × điểm) và kết quả ván (+1 thắng, 0 hòa, -1 thua, theo góc người sắp đi), chỉ trên các
+    ván thuộc tập TRAIN (cùng cách chia theo ván với seed). Trả về (k tốt nhất, {k: sai số}).
+    """
+    score_of = {}
+    for game_id, moves, label, best in labeled:
+        if -1.0 < best < 1.0:
+            env = conn.from_moves(moves)
+            score_of[to_player_view(env.state, env.turn).tobytes()] = best
+    X, y, ids = value_examples(games)
+    split = split_by_game(ids, ratios, seed)
+    outcome = {0: 0.0, 1: 1.0, 2: -1.0}
+    scores = []
+    results = []
+    for i in split["train"]:
+        key = X[i].tobytes()
+        if key in score_of:
+            scores.append(score_of[key])
+            results.append(outcome[int(y[i])])
+    scores = np.array(scores)
+    results = np.array(results)
+    errors = {}
+    for k in candidates:
+        errors[k] = float(np.mean((np.tanh(k * scores) - results) ** 2))
+    best_k = min(errors, key=errors.get)
+    return best_k, errors
+
+
+def search_score_examples(labeled, scale=1.0):
+    """Mẫu cho mạng value hồi quy (phiên bản 2): mọi thế đã gán nhãn, đích theo góc người sắp đi.
+
+    Thế Alpha-Beta tìm sâu đã chứng minh thắng chắc / thua chắc: +1 / -1.
+    Thế còn lại: tanh(scale × điểm lượng giá), scale chọn bằng fit_score_scale.
+    """
+    X = []
+    y = []
+    ids = []
+    for game_id, moves, label, best in labeled:
+        env = conn.from_moves(moves)
+        X.append(to_player_view(env.state, env.turn))
+        if best >= 1.0:
+            y.append(1.0)
+        elif best <= -1.0:
+            y.append(-1.0)
+        else:
+            y.append(float(np.tanh(scale * best)))
+        ids.append(game_id)
+    return np.array(X, dtype=np.float32), np.array(y, dtype=np.float32), ids
+
+
 def search_value_examples(games, labeled):
     """Mẫu cho mạng value phiên bản 2: như value_examples, nhưng thế nào Alpha-Beta tìm sâu đã
     chứng minh thắng/thua chắc chắn (điểm bằng +1/-1) thì lấy kết quả đó thay cho kết quả ván,
@@ -319,7 +413,7 @@ def remove_duplicates(X, y):
     seen = set()
     keep = []
     for i in range(len(X)):
-        key = (X[i].tobytes(), int(y[i]))
+        key = (X[i].tobytes(), float(y[i]))
         if key not in seen:
             seen.add(key)
             keep.append(i)
@@ -352,12 +446,14 @@ def mirror_examples(X, y, kind):
     return X_flip, y_flip
 
 
-def make_dataset(games, kind="policy", seed=0, ratios=(0.8, 0.1, 0.1), mirror=False, labeled=None):
+def make_dataset(games, kind="policy", seed=0, ratios=(0.8, 0.1, 0.1), mirror=False, labeled=None,
+                 score_scale=1.0):
     """Tạo tập train/val/test đã chia theo ván và đã loại trùng.
 
     kind = "policy" (cấp 5, nhãn = nước của bên thắng), "value" (mạng value, nhãn = kết quả ván),
-    "search_policy" / "search_value" (phiên bản 2, cần labeled = kết quả label_positions).
+    "search_policy" / "search_value" / "search_score" (phiên bản 2, cần labeled = kết quả label_positions).
     mirror = True: thêm bản lật gương vào tập TRAIN (val, test giữ nguyên để so sánh công bằng).
+    score_scale: chỉ dùng cho "search_score" (xem fit_score_scale).
     """
     replaced = None
     if kind == "policy":
@@ -368,6 +464,8 @@ def make_dataset(games, kind="policy", seed=0, ratios=(0.8, 0.1, 0.1), mirror=Fa
         X, y, ids = search_policy_examples(labeled)
     elif kind == "search_value":
         X, y, ids, replaced = search_value_examples(games, labeled)
+    elif kind == "search_score":
+        X, y, ids = search_score_examples(labeled, score_scale)
     else:
         raise ValueError("kind không hợp lệ")
     split = split_by_game(ids, ratios, seed)
