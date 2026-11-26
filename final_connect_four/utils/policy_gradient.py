@@ -118,7 +118,9 @@ def reinforce_update(model, optimizer, steps, returns):
         probs = model([flats, convs], training=True)
         # bỏ cột đầy rồi chuẩn hóa lại, đúng như phân phối đã dùng để rút nước
         masked = probs * masks
-        masked = masked / tf.reduce_sum(masked, axis=1, keepdims=True)
+        # cộng 1e-8 vào mẫu: mạng quá chắc chắn vào một cột đầy thì tổng xác suất các cột hợp lệ
+        # gần bằng 0, chia cho 0 ra NaN và làm hỏng toàn bộ trọng số
+        masked = masked / (tf.reduce_sum(masked, axis=1, keepdims=True) + 1e-8)
         chosen = tf.gather(masked, actions, axis=1, batch_dims=1)
         log_probs = tf.math.log(chosen + 1e-8)
         loss = -tf.reduce_mean(log_probs * rets)
@@ -175,7 +177,7 @@ def train_stage(model, make_opponent, n_batches, games_per_batch=10, gamma=0.95,
     Trả về dict đường cong học của giai đoạn.
     """
     if optimizer is None:
-        optimizer = keras.optimizers.Adam(learning_rate=0.00025)
+        optimizer = keras.optimizers.Adam(learning_rate=0.00025, clipnorm=1.0)
     if checkpoint_paths is None:
         checkpoint_paths = []
     curve = {"batch": [], "mean_reward": [], "loss": [], "eval": []}
@@ -226,7 +228,8 @@ def train_two_stages(model, level5_model, stage1_batches=300, stage2_batches=300
     Giai đoạn 2: tự chơi; mỗi ván rút ngẫu nhiên một trong pool_size checkpoint gần nhất làm đối thủ.
     Đấu với bản cũ của chính mình tránh việc chỉ học cách thắng đúng một đối thủ.
     """
-    optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
+    # clipnorm: giới hạn độ lớn gradient mỗi bước để một lô bất thường không làm mạng "nổ"
+    optimizer = keras.optimizers.Adam(learning_rate=learning_rate, clipnorm=1.0)
     checkpoint_paths = []
 
     def level5_opponent():
