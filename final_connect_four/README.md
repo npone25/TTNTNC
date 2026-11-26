@@ -42,15 +42,21 @@ Bảng ghi vào `results/tables/` (CSV), hình vào `results/figures/`.
 
 Thứ tự chạy (notebook sau dùng kết quả của notebook trước):
 
-1. `nb1_engine_cap1_2`: Game API, chạy toàn bộ kiểm thử, cấp 2 đấu cấp 1, thống kê luật của cấp 2.
-2. `nb2_cap3_4_rq1`: tạo bộ thế cờ chiến thuật `files/tactics.json`; RQ1 (cấp 3 và cấp 4 cùng thời gian);
-   ablation bật/tắt cắt tỉa; ablation số mô phỏng MCTS.
-3. `nb3_cap5_policy`: mỗi máy sinh ván chuyên gia với seed riêng (`MACHINE` = phuc / huong / thienphuc,
-   khoảng 1 giây mỗi ván), gộp lại, huấn luyện cấp 5, lưu `files/policy_conn.keras`.
+1. `nb1_engine_cap1_2`: Game API, perft, chạy toàn bộ kiểm thử, cấp 2 đấu cấp 1, thống kê luật của cấp 2.
+2. `nb2_cap3_4_rq1`: tạo bộ thế cờ chiến thuật `files/tactics.json`; ablation bật/tắt cắt tỉa;
+   ablation số mô phỏng MCTS; độ nhạy hàm lượng giá cấp 3; RQ1 (cấp 3 và cấp 4 cùng thời gian).
+3. `nb3_cap5_policy`: mỗi máy sinh một phần ván chuyên gia với seed riêng (biến `PARTS_TO_RUN`, tên phần
+   theo `data.seeds`), gộp lại, huấn luyện cấp 5, lưu `files/policy_conn.keras`.
 4. `nb4_cap6_rq2`: huấn luyện cấp 6 hai giai đoạn (đấu cấp 5, rồi tự chơi với checkpoint cũ),
    lưu `files/pg_conn.keras`; RQ2.
-5. `nb5_cap7_rq3`: huấn luyện mạng value `files/value_conn.keras`; bốn cấu hình ablation của cấp 7; RQ3.
-6. `nb6_giai_dau_tong_hop`: giải vòng tròn cấp 1-7, ma trận đối đầu, ảnh hưởng bên đi trước, thời gian mỗi nước.
+5. `nb5_cap7_rq3`: huấn luyện mạng value `files/value_conn.keras`; chọn hệ số `mix` bằng ván thử riêng;
+   bốn cấu hình ablation của cấp 7; RQ3.
+6. `nb6_giai_dau_tong_hop`: giải vòng tròn cấp 1-7, ma trận đối đầu, ảnh hưởng bên đi trước,
+   chi phí tính toán, độ chính xác chiến thuật, ván minh họa.
+
+Các mục chạy theo thời gian thật (RQ1 ở nb2, mục 4b ở nb5) phải chạy khi máy không làm việc nặng nào khác.
+Mỗi ván của các cặp có tác tử tất định mở đầu bằng 2 nước ngẫu nhiên có seed (`opening_random_moves`),
+để 200 ván không lặp lại cùng một ván.
 
 Dùng trực tiếp trong Python:
 
