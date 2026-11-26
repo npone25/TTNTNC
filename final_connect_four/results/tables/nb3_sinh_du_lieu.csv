@@ -1,0 +1,4 @@
+﻿file,seed,số ván,giây,CPU,số nhân,hệ điều hành
+games_phuc.p,1,1000,4329.9,"Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",16,Windows
+games_huong.p,2,1000,3991.2,"Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",16,Windows
+games_thienphuc.p,3,1000,3782.6,"Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",16,Windows
