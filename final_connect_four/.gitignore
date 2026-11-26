@@ -18,3 +18,5 @@ files/*.npz
 thu_nhanh/
 # Checkpoint trung gian của cấp 6
 files/pg_checkpoints/
+# Mô hình thử của nb7 (ảnh hưởng seed), tạo lại được
+files/seed_thu/

@@ -53,6 +53,7 @@ Thứ tự chạy (notebook sau dùng kết quả của notebook trước):
    bốn cấu hình ablation của cấp 7; RQ3.
 6. `nb6_giai_dau_tong_hop`: giải vòng tròn cấp 1-7, ma trận đối đầu, ảnh hưởng bên đi trước,
    chi phí tính toán, độ chính xác chiến thuật, ván minh họa.
+7. `nb7_anh_huong_seed`: ảnh hưởng của seed huấn luyện (cấp 5, 3 seed) và seed ván đấu (cấp 4 đấu cấp 3, 3 seed).
 
 Các mục chạy theo thời gian thật (RQ1 ở nb2, mục 4b ở nb5) phải chạy khi máy không làm việc nặng nào khác.
 Mỗi ván của các cặp có tác tử tất định mở đầu bằng 2 nước ngẫu nhiên có seed (`opening_random_moves`),
