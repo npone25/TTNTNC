@@ -82,10 +82,14 @@ rq3:
   opening_random_moves: 2
   seed: 500
 
-# Chọn hệ số mix của cấp 7 bằng ván thử riêng (seed riêng), trước khi chạy RQ3 và giải đấu
-mix_pilot:
-  mixes: [0.0, 0.5]
-  games: 40
+# Chọn tham số cấp 7 bằng ván thử riêng với đối thủ chung, seed riêng, trước RQ3 và giải đấu.
+# Phiên bản 1 chỉ so mix 0.0 với 0.5 (đấu nhau) và chọn 0.0.
+# mix giữ 0.0 như phiên bản 1 (0.5 không mạnh hơn rõ rệt mà chậm gấp 5 lần), chỉ dò c_puct.
+cap7_pilot:
+  c_puct: [1.0, 1.5, 3.0]
+  opponent: cap4
+  games: 60
+  opening_random_moves: 2
   seed: 900
 
 # RQ3: bốn cấu hình ablation của cấp 7 (cùng hàm alphago_tree, chỉ khác hai công tắc)
@@ -113,6 +117,10 @@ data:
   minimax_depth: 3
   mcts_simulations: 1000
   seeds: {phuc: 1, huong: 2, thienphuc: 3}
+  # phiên bản 2: gán nhãn mọi thế cờ của 3000 ván bằng Alpha-Beta tìm sâu (nhìn trước 6 nước),
+  # chạy song song; label_processes rỗng = số nhân CPU trừ 2
+  label_depth: 5
+  label_processes:
 
 # Huấn luyện (utils/nets.py)
 # epochs là số epoch tối đa; patience: dừng khi val_loss không giảm trong 5 epoch liền,
@@ -130,15 +138,20 @@ train_value:
   learning_rate: 0.0005
   patience: 5
   mirror: true
-# lần chạy đầu 300 + 300 lô (khoảng 4 phút): phần thưởng giai đoạn 1 vẫn đang tăng ở lô cuối,
-# tức chưa học xong, nên tăng lên 1500 + 1500 lô
+# Phiên bản 1 (tag v1-ket-qua): mạng hai đầu vào khởi tạo ngẫu nhiên, 1500 + 1500 lô, learning_rate 0.00025;
+# không vượt được cấp 5. Phiên bản 2: khởi tạo từ mạng cấp 5 (init_from_cap5) như AlphaGo,
+# learning rate nhỏ để không phá kiến thức sẵn có, cuối cùng chọn checkpoint tốt nhất bằng
+# select_games ván với cấp 5 (seed riêng select_seed, không trùng ván RQ2 và giải đấu)
 train_pg:
+  init_from_cap5: true
   stage1_batches: 1500
   stage2_batches: 1500
   games_per_batch: 10
   gamma: 0.95
-  learning_rate: 0.00025
+  learning_rate: 0.00005
   pool_size: 5
   eval_every: 100
   checkpoint_every: 250
+  select_games: 100
+  select_seed: 5000
   seed: 2026

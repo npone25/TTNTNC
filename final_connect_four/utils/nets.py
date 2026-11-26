@@ -203,7 +203,7 @@ def train_model(model, dataset, epochs=30, batch_size=128, verbose=1, patience=N
 
 
 def train_value(games, path="files/value_conn.keras", epochs=30, batch_size=128,
-                learning_rate=0.0005, seed=0, verbose=1, mirror=False, patience=None):
+                learning_rate=0.0005, seed=0, verbose=1, mirror=False, patience=None, labeled=None):
     """Huấn luyện mạng value cho cấp 7 từ ván chuyên gia (kết quả của data.generate_games).
 
     Nhãn của mỗi thế cờ là kết quả cuối ván nhìn từ người sắp đi (hòa / thắng / thua),
@@ -211,11 +211,15 @@ def train_value(games, path="files/value_conn.keras", epochs=30, batch_size=128,
     Trả về (model, report); mô hình lưu ở path kèm file báo cáo .json.
     """
     from utils import data
-    dataset = data.make_dataset(games, kind="value", seed=seed, mirror=mirror)
+    # labeled (phiên bản 2): thế nào tìm kiếm đã chứng minh thắng/thua thì dùng kết quả đó làm nhãn
+    kind = "value" if labeled is None else "search_value"
+    dataset = data.make_dataset(games, kind=kind, seed=seed, mirror=mirror, labeled=labeled)
     model = build_value_net(learning_rate=learning_rate)
     report = train_model(model, dataset, epochs=epochs, batch_size=batch_size, verbose=verbose,
                          patience=patience)
     report["learning_rate"] = learning_rate
+    report["kind"] = kind
+    report["labels_replaced"] = dataset.get("replaced")
     save_model(model, path, report)
     return model, report
 

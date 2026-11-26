@@ -4,7 +4,8 @@ Kế thừa: notebook ch15 (playing_red, playing_yellow, discount_rs, vòng hu�
 Sửa: chỉ rút nước trong các cột hợp lệ (sách cho rút cả cột đầy rồi phạt -1, tốn nhiều ván vô ích);
      một hàm chơi cho cả hai màu thay cho playing_red/playing_yellow; đối thủ giai đoạn 1 là mô hình cấp 5 do nhóm tự huấn luyện.
 Thêm: giai đoạn 2 tự chơi với các checkpoint cũ của chính nó; lưu checkpoint đều đặn; ghi đường cong học
-      (phần thưởng trung bình mỗi lô và điểm số khi đấu với đối thủ cố định, mỗi ván mở đầu 2 nước ngẫu nhiên có seed). Mạng tạo bằng nets.build_pg_net().
+      (phần thưởng trung bình mỗi lô và điểm số khi đấu với đối thủ cố định, mỗi ván mở đầu 2 nước ngẫu nhiên có seed);
+      phiên bản 2 khởi tạo từ mạng cấp 5 (như AlphaGo: mạng RL bắt đầu từ mạng học có giám sát) rồi mới tự chơi. Mạng tạo bằng nets.build_pg_net().
 Phụ trách: Trần Quỳnh Hương.
 
 Ý tưởng REINFORCE:
@@ -115,7 +116,11 @@ def reinforce_update(model, optimizer, steps, returns):
     rets = np.array(returns, dtype=np.float32)
 
     with tf.GradientTape() as tape:
-        probs = model([flats, convs], training=True)
+        # mạng hai đầu vào (kiến trúc ch15 của sách) hoặc một đầu vào (khởi tạo từ mạng cấp 5)
+        if nets.is_two_input(model):
+            probs = model([flats, convs], training=True)
+        else:
+            probs = model(convs, training=True)
         # bỏ cột đầy rồi chuẩn hóa lại, đúng như phân phối đã dùng để rút nước
         masked = probs * masks
         # cộng 1e-8 vào mẫu: mạng quá chắc chắn vào một cột đầy thì tổng xác suất các cột hợp lệ

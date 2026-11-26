@@ -142,8 +142,8 @@ def plot_scores(x_values, series, xlabel, title, path, ylabel="score"):
     fig, ax = plt.subplots(figsize=(7, 4.2))
     for name, summaries in series.items():
         scores = [s["score"] for s in summaries]
-        low = [s["score"] - s["ci_low"] for s in summaries]
-        high = [s["ci_high"] - s["score"] for s in summaries]
+        low = [max(0.0, s["score"] - s["ci_low"]) for s in summaries]
+        high = [max(0.0, s["ci_high"] - s["score"]) for s in summaries]
         ax.errorbar(x_values, scores, yerr=[low, high], marker="o", capsize=4, linewidth=2, label=name)
     ax.axhline(0.5, color="#999999", linewidth=1, linestyle="--")
     ax.set_ylim(0, 1)

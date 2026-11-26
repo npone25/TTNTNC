@@ -3,7 +3,9 @@
 Kế thừa: cách sinh ván ở notebook ch11 mục 1.2 (50% Minimax độ sâu 3, 50% MCTS), sách AlphaGo Simplified (Mark Liu), giấy phép MIT.
 Sửa: giảm số ván cho vừa thời gian; dùng engine và tác tử của nhóm (MCTS cây cấp 4 thay MCTS phẳng của sách).
 Thêm: chia train/val/test theo ván; loại thế cờ trùng và loại thế ở val/test đã có trong train; lưu seed, số ván, thời gian, cấu hình máy; lưu dần để không mất dữ liệu khi bị ngắt;
-      lật gương bàn cờ để nhân đôi tập train (Connect Four đối xứng trái phải).
+      lật gương bàn cờ để nhân đôi tập train (Connect Four đối xứng trái phải);
+      phiên bản 2: gán nhãn mọi thế cờ bằng Alpha-Beta tìm sâu (chạy song song nhiều tiến trình),
+      nhãn value lấy kết quả chắc chắn do tìm kiếm chứng minh khi có, còn lại lấy kết quả ván.
 Phụ trách: Nguyễn Trọng Phúc.
 
 Quy trình (chạy trong notebook nb3):
@@ -175,6 +177,117 @@ def value_examples(games):
     return np.array(X, dtype=np.float32), np.array(y, dtype=np.int64), ids
 
 
+def game_positions(games):
+    """Mọi thế cờ chưa kết thúc trong các ván, mỗi thế lấy một lần (bỏ thế trùng giữa các ván).
+
+    Trả về danh sách (game_id, các nước đã đi để tới thế đó). Thế đầu tiên gặp thuộc về ván đó
+    (dùng khi chia train/val/test theo ván).
+    """
+    seen = set()
+    result = []
+    for game in games:
+        moves = []
+        for state, move, turn in game["history"]:
+            key = to_player_view(state, turn).tobytes()
+            if key not in seen:
+                seen.add(key)
+                result.append((game["game_id"], list(moves)))
+            moves.append(int(move))
+    return result
+
+
+def label_with_search(moves, depth):
+    """Nhãn của một thế cờ bằng Alpha-Beta tìm sâu depth (cùng hàm tìm kiếm của cấp 3).
+
+    Trả về (cột tốt nhất 1-7, điểm tốt nhất theo góc người sắp đi).
+    Nhiều cột bằng điểm thì lấy cột gần giữa nhất (theo MOVE_ORDER) để nhãn không ngẫu nhiên.
+    """
+    from utils import alphabeta
+    env = conn.from_moves(moves)
+    scores = alphabeta.Search(prune=True).root_scores(env, depth)
+    best = max(scores.values())
+    for col in alphabeta.MOVE_ORDER:
+        if col in scores and scores[col] == best:
+            return col, float(best)
+
+
+def _label_job(job):
+    """Việc của một tiến trình con: gán nhãn một thế cờ (phải là hàm cấp module để chạy song song)."""
+    game_id, moves, depth = job
+    label, best = label_with_search(moves, depth)
+    return (game_id, moves, label, best)
+
+
+def label_positions(positions, depth=5, processes=None, out_path=None, block=5000, verbose=True):
+    """Gán nhãn cho danh sách thế cờ (kết quả của game_positions) bằng nhiều tiến trình song song.
+
+    Cứ mỗi block thế lưu một lần vào out_path (pickle, kèm out_path + ".json"); chạy lại thì
+    tiếp tục từ chỗ đã lưu. Trả về danh sách (game_id, moves, cột tốt nhất, điểm tốt nhất).
+    """
+    from multiprocessing import Pool
+    done = []
+    if out_path is not None and os.path.exists(out_path):
+        done = load_games(out_path)
+        if verbose:
+            print(f"đã có {len(done)} thế được gán nhãn, chạy tiếp")
+    if processes is None:
+        processes = max(1, (os.cpu_count() or 2) - 2)
+    start = time.time()
+    meta = {"depth": depth, "processes": processes, "n_positions": len(positions), "machine": machine_info()}
+    if out_path is not None and os.path.exists(out_path + ".json"):
+        with open(out_path + ".json", encoding="utf-8") as f:
+            meta["seconds_before"] = json.load(f).get("seconds", 0)
+    with Pool(processes) as pool:
+        for begin in range(len(done), len(positions), block):
+            jobs = []
+            for game_id, moves in positions[begin:begin + block]:
+                jobs.append((game_id, moves, depth))
+            done.extend(pool.map(_label_job, jobs, chunksize=32))
+            seconds = round(time.time() - start + meta.get("seconds_before", 0), 1)
+            meta["n_done"] = len(done)
+            meta["seconds"] = seconds
+            if out_path is not None:
+                save_games(done, out_path, meta)
+            if verbose:
+                print(f"đã gán nhãn {len(done)}/{len(positions)} thế, {seconds} giây")
+    return done
+
+
+def search_policy_examples(labeled):
+    """Mẫu cho mạng policy phiên bản 2: mọi thế cờ, nhãn = cột tốt nhất theo Alpha-Beta tìm sâu."""
+    X = []
+    y = []
+    ids = []
+    for game_id, moves, label, best in labeled:
+        env = conn.from_moves(moves)
+        X.append(to_player_view(env.state, env.turn))
+        y.append(label - 1)
+        ids.append(game_id)
+    return np.array(X, dtype=np.float32), np.array(y, dtype=np.int64), ids
+
+
+def search_value_examples(games, labeled):
+    """Mẫu cho mạng value phiên bản 2: như value_examples, nhưng thế nào Alpha-Beta tìm sâu đã
+    chứng minh thắng/thua chắc chắn (điểm bằng +1/-1) thì lấy kết quả đó thay cho kết quả ván,
+    vì kết quả ván còn phụ thuộc các nước sai về sau."""
+    proven = {}
+    for game_id, moves, label, best in labeled:
+        env = conn.from_moves(moves)
+        key = to_player_view(env.state, env.turn).tobytes()
+        if best >= 1.0:
+            proven[key] = 1
+        elif best <= -1.0:
+            proven[key] = 2
+    X, y, ids = value_examples(games)
+    replaced = 0
+    for i in range(len(X)):
+        key = X[i].tobytes()
+        if key in proven and y[i] != proven[key]:
+            y[i] = proven[key]
+            replaced += 1
+    return X, y, ids, replaced
+
+
 def split_by_game(game_ids, ratios=(0.8, 0.1, 0.1), seed=0):
     """Chia theo VÁN (không theo thế cờ) để các thế cùng một ván không rơi vào hai tập.
 
@@ -232,25 +345,31 @@ def mirror_examples(X, y, kind):
     Mạng policy: nước đi cũng lật theo (chỉ số cột c thành 6 - c). Mạng value: nhãn giữ nguyên.
     """
     X_flip = X[:, ::-1, :, :].copy()
-    if kind == "policy":
+    if kind in ("policy", "search_policy"):
         y_flip = 6 - y
     else:
         y_flip = y.copy()
     return X_flip, y_flip
 
 
-def make_dataset(games, kind="policy", seed=0, ratios=(0.8, 0.1, 0.1), mirror=False):
+def make_dataset(games, kind="policy", seed=0, ratios=(0.8, 0.1, 0.1), mirror=False, labeled=None):
     """Tạo tập train/val/test đã chia theo ván và đã loại trùng.
 
-    kind = "policy" (cấp 5) hoặc "value" (mạng value cho cấp 7).
+    kind = "policy" (cấp 5, nhãn = nước của bên thắng), "value" (mạng value, nhãn = kết quả ván),
+    "search_policy" / "search_value" (phiên bản 2, cần labeled = kết quả label_positions).
     mirror = True: thêm bản lật gương vào tập TRAIN (val, test giữ nguyên để so sánh công bằng).
     """
+    replaced = None
     if kind == "policy":
         X, y, ids = policy_examples(games)
     elif kind == "value":
         X, y, ids = value_examples(games)
+    elif kind == "search_policy":
+        X, y, ids = search_policy_examples(labeled)
+    elif kind == "search_value":
+        X, y, ids, replaced = search_value_examples(games, labeled)
     else:
-        raise ValueError("kind phải là 'policy' hoặc 'value'")
+        raise ValueError("kind không hợp lệ")
     split = split_by_game(ids, ratios, seed)
     X_train = X[split["train"]]
     y_train = y[split["train"]]
@@ -264,7 +383,7 @@ def make_dataset(games, kind="policy", seed=0, ratios=(0.8, 0.1, 0.1), mirror=Fa
     X_val, y_val = remove_overlap(X_train, X_val, y_val)
     X_test, y_test = remove_overlap(X_train, X_test, y_test)
     return {
-        "kind": kind, "seed": seed, "n_games": len(set(ids)), "mirror": mirror,
+        "kind": kind, "seed": seed, "n_games": len(set(ids)), "mirror": mirror, "replaced": replaced,
         "X_train": X_train, "y_train": y_train,
         "X_val": X_val, "y_val": y_val,
         "X_test": X_test, "y_test": y_test,
