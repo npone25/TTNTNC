@@ -6,23 +6,25 @@ Alpha-Beta, MCTS/UCT, mạng policy học có giám sát, policy gradient, MCTS 
 
 Repository: https://github.com/npone25/TTNTNC (thư mục `final_connect_four`)
 
+Drive: Dataset + video demo: [drive.google.com/drive/folders/1U9M8nNIO_76e9NzCOL4WR5rA72ceIByc?usp=sharing](https://drive.google.com/drive/folders/1U9M8nNIO_76e9NzCOL4WR5rA72ceIByc?usp=sharing)
+
 ## Sản phẩm nộp và vị trí
 
-| Yêu cầu | Vị trí |
-|---|---|
-| Báo cáo, slide, poster | `docs/bao_cao/`, `docs/slide/`, `docs/poster/` |
-| Mã nguồn | `utils/` (engine, 7 tác tử, mạng, giải đấu), `play.py` (demo), `tests/` (kiểm thử) |
-| File cấu hình | `config.yaml`: tham số từng cấp, số ván, seed, ngân sách tính toán |
-| Hướng dẫn cài đặt, chạy | mục 1 đến 4 của file này |
-| Dataset | `files/games_*.p` (3000 ván chuyên gia), `files/nhan_alphabeta.p` (66.314 thế gán nhãn bằng Alpha-Beta tìm sâu), `files/tu_choi_cap5.p` (3000 ván tự chơi của cấp 5) và `files/nhan_alphabeta_tu_choi.p` (53.845 thế mới từ các ván đó, gán nhãn cùng cách); thông tin sinh dữ liệu trong các file `.json` đi kèm |
-| Notebook | `nb1` … `nb7` ở thư mục gốc, đã chạy, giữ nguyên output |
-| Mô hình đã huấn luyện | `files/policy_conn.keras` (cấp 5), `files/pg_conn.keras` (cấp 6), `files/value_conn.keras` (mạng value cấp 7), mỗi mô hình kèm `.json` ghi siêu tham số, đường cong học, thời gian huấn luyện, cấu hình máy |
-| Kết quả thực nghiệm | `results/logs/` (log thô từng ván), `results/tables/` (bảng CSV) |
-| Hình ảnh | `results/figures/` |
-| Nhật ký thí nghiệm | `docs/NHAT_KY_THI_NGHIEM.md`: mọi lần chạy, kết quả, lý do từng quyết định |
-| Video demo | (cập nhật link) |
-| Tài liệu tham khảo | mục 8 |
-| Danh sách thành viên, tỷ lệ đóng góp | mục 9 |
+| Yêu cầu                                    | Vị trí                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Báo cáo, slide, poster                     | `docs/bao_cao/Bao_cao_TTNTNC_Connect_Four.docx` (kèm bản PDF), `docs/slide/`, `docs/poster/`                                                                                                                                                                                                                                                       |
+| Mã nguồn                                   | `utils/` (engine, 7 tác tử, mạng, giải đấu), `play.py` (demo), `tests/` (kiểm thử)                                                                                                                                                                                                                                                           |
+| File cấu hình                              | `config.yaml`: tham số từng cấp, số ván, seed, ngân sách tính toán                                                                                                                                                                                                                                                                              |
+| Hướng dẫn cài đặt, chạy               | mục 1 đến 4 của file này                                                                                                                                                                                                                                                                                                                              |
+| Dataset                                      | `files/games_*.p` (3000 ván chuyên gia), `files/nhan_alphabeta.p` (66.314 thế gán nhãn bằng Alpha-Beta tìm sâu), `files/tu_choi_cap5.p` (3000 ván tự chơi của cấp 5) và `files/nhan_alphabeta_tu_choi.p` (53.845 thế mới từ các ván đó, gán nhãn cùng cách); thông tin sinh dữ liệu trong các file `.json` đi kèm |
+| Notebook                                     | `nb1` … `nb7` ở thư mục gốc, đã chạy, giữ nguyên output                                                                                                                                                                                                                                                                                      |
+| Mô hình đã huấn luyện                  | `files/policy_conn.keras` (cấp 5), `files/pg_conn.keras` (cấp 6), `files/value_conn.keras` (mạng value cấp 7), mỗi mô hình kèm `.json` ghi siêu tham số, đường cong học, thời gian huấn luyện, cấu hình máy                                                                                                                    |
+| Kết quả thực nghiệm                      | `results/logs/` (log thô từng ván), `results/tables/` (bảng CSV)                                                                                                                                                                                                                                                                                   |
+| Hình ảnh                                   | `results/figures/`                                                                                                                                                                                                                                                                                                                                       |
+| Nhật ký thí nghiệm                       | `docs/NHAT_KY_THI_NGHIEM.md`: mọi lần chạy, kết quả, lý do từng quyết định                                                                                                                                                                                                                                                                     |
+| Video demo                                   | (cập nhật link)                                                                                                                                                                                                                                                                                                                                          |
+| Tài liệu tham khảo                        | mục 8                                                                                                                                                                                                                                                                                                                                                     |
+| Danh sách thành viên, tỷ lệ đóng góp | mục 9                                                                                                                                                                                                                                                                                                                                                     |
 
 ### Hai phiên bản
 
@@ -100,15 +102,15 @@ Mỗi ván của các cặp có tác tử tất định mở đầu bằng 2 nư
 
 ## 5. Các tác tử
 
-| Cấp | Tác tử | File | Hàm |
-|---|---|---|---|
-| 1 | Ngẫu nhiên | utils/rules.py | `conn_random(env)` |
-| 2 | Luật heuristic | utils/rules.py | `conn_think3(env)` |
-| 3 | Minimax Alpha-Beta | utils/alphabeta.py | `MiniMax_conn(env, depth=3)` |
-| 4 | MCTS/UCT dạng cây | utils/mcts_uct.py | `mcts_uct(env, num_simulations=400)` |
-| 5 | Mạng policy học có giám sát | utils/policy_net.py | `policy_move(env, model)` |
-| 6 | Policy gradient (REINFORCE) | utils/policy_gradient.py | `pg_move(env, model)` |
-| 7 | PUCT + mạng policy, value | utils/alphago_tree.py | `alphago_tree(env, prior, value, fast)` |
+| Cấp | Tác tử                         | File                     | Hàm                                      |
+| ---- | -------------------------------- | ------------------------ | ----------------------------------------- |
+| 1    | Ngẫu nhiên                     | utils/rules.py           | `conn_random(env)`                      |
+| 2    | Luật heuristic                  | utils/rules.py           | `conn_think3(env)`                      |
+| 3    | Minimax Alpha-Beta               | utils/alphabeta.py       | `MiniMax_conn(env, depth=3)`            |
+| 4    | MCTS/UCT dạng cây              | utils/mcts_uct.py        | `mcts_uct(env, num_simulations=400)`    |
+| 5    | Mạng policy học có giám sát | utils/policy_net.py      | `policy_move(env, model)`               |
+| 6    | Policy gradient (REINFORCE)      | utils/policy_gradient.py | `pg_move(env, model)`                   |
+| 7    | PUCT + mạng policy, value       | utils/alphago_tree.py    | `alphago_tree(env, prior, value, fast)` |
 
 Mọi tác tử nhận `env` và trả về một cột 1-7, không làm thay đổi `env`.
 
@@ -145,11 +147,11 @@ nhóm tự huấn luyện lại.
 
 ## 9. Thành viên và tỷ lệ đóng góp
 
-| Họ tên | MSSV | Nhiệm vụ, công việc thực hiện | Tỷ lệ |
-|---|---|---|---|
-| Nguyễn Trọng Phúc | 3123410281 | Engine và kiểm thử, lõi tìm kiếm cây, cấp 4, cấp 7, giải đấu và thống kê, sinh dữ liệu và hàm mạng, demo, notebook, chạy thí nghiệm, RQ3 | (điền) % |
-| Trần Quỳnh Hương | (điền) | Cấp 5, cấp 6, RQ2 | (điền) % |
-| Phạm Thiên Phúc | (điền) | Cấp 1, 2, 3, bộ thế cờ chiến thuật, RQ1 | (điền) % |
-| **Tổng** | | | **100%** |
+| Họ tên             | MSSV       | Nhiệm vụ, công việc thực hiện                                                                                                                             | Tỷ lệ        |
+| -------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| Nguyễn Trọng Phúc | 3123410281 | Engine và kiểm thử, lõi tìm kiếm cây, cấp 4, cấp 7, giải đấu và thống kê, sinh dữ liệu và hàm mạng, demo, notebook, chạy thí nghiệm, RQ3 | 34 %           |
+| Trần Quỳnh Hương | 3123410141 | Cấp 5, cấp 6, RQ2                                                                                                                                             | 33 %           |
+| Phạm Thiên Phúc   | 3123410282 | Cấp 1, 2, 3, bộ thế cờ chiến thuật, RQ1                                                                                                                   | 33 %           |
+| **Tổng**      |            |                                                                                                                                                                 | **100%** |
 
 Phân công chi tiết và lịch sử thực hiện: `docs/HUONG_DAN_NHOM.md` và lịch sử commit trên GitHub.

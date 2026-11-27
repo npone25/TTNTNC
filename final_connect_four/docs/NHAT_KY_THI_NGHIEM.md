@@ -165,4 +165,4 @@ Kiểm tra nhanh trên máy ảo (2 nhân, Linux), cấp 7 đấu cấp 4, 30 v�
 
 ### Kiểm thử (nb1)
 
-- Chạy lại sau mọi thay đổi của phiên bản 2: 88 test đều qua.
+- Chạy lại toàn bộ test sau khi sửa code ở phiên bản 2, không có test nào lỗi.
