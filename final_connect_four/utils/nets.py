@@ -2,11 +2,12 @@
 
 Kế thừa: kiến trúc ở notebook ch11 mục 2.1 và ch15 mục 1.1, 2.3, sách AlphaGo Simplified (Mark Liu), giấy phép MIT.
 Sửa: chuyển sang Keras 3 (TensorFlow 2.21): dùng keras.Input thay tham số input_shape; nối hai đầu vào bằng layers.Concatenate thay tf.concat (Keras 3 báo lỗi với tf.concat); lưu đuôi .keras; nhãn dạng số nguyên (sparse) thay one-hot.
-Thêm: đánh giá trên tập validation và test (sách không có); ghi đường cong học, thời gian huấn luyện và cấu hình máy; gọi mạng qua tf.function (nhanh hơn model.predict của sách khoảng 60 lần khi đánh giá từng thế cờ lẻ).
+Thêm: đánh giá trên tập validation và test (sách không có); dừng sớm theo val_loss và lấy lại trọng số tốt nhất; ghi đường cong học, thời gian huấn luyện và cấu hình máy; gọi mạng qua tf.function (nhanh hơn model.predict của sách khoảng 60 lần khi đánh giá từng thế cờ lẻ).
 Phụ trách: Nguyễn Trọng Phúc.
 
 Quy ước đầu vào: bàn cờ nhìn từ phía NGƯỜI SẮP ĐI (quân mình = 1, đối thủ = -1), hình dạng (7, 6, 1).
-Đầu ra mạng value: 3 lớp [hòa, người sắp đi thắng, người sắp đi thua].
+Đầu ra mạng value: 3 lớp [hòa, người sắp đi thắng, người sắp đi thua]; phiên bản 2 có thêm mạng value hồi quy
+một đầu ra trong [-1, 1], học điểm của Alpha-Beta tìm sâu.
 """
 
 import json
@@ -63,19 +64,29 @@ def build_policy_net(learning_rate=0.001):
     return model
 
 
-def build_value_net(learning_rate=0.0005):
-    """Mạng value, cùng kiến trúc với value_model ở ch15 của sách (3 lớp đầu ra)."""
+def build_value_net(learning_rate=0.0005, regression=False):
+    """Mạng value, cùng kiến trúc thân với value_model ở ch15 của sách.
+
+    regression = False: 3 lớp đầu ra [hòa, người sắp đi thắng, người sắp đi thua] như sách.
+    regression = True (phiên bản 2): một đầu ra tanh trong [-1, 1], học thẳng điểm của Alpha-Beta tìm sâu.
+    """
+    if regression:
+        head = layers.Dense(1, activation="tanh")
+        loss = "mse"
+        metrics = ["mae"]
+    else:
+        head = layers.Dense(3, activation="softmax")
+        loss = "sparse_categorical_crossentropy"
+        metrics = ["accuracy"]
     model = keras.Sequential([
         keras.Input(shape=(7, 6, 1)),
         layers.Conv2D(filters=128, kernel_size=(4, 4), padding="same", activation="relu"),
         layers.Flatten(),
         layers.Dense(64, activation="relu"),
         layers.Dense(64, activation="relu"),
-        layers.Dense(3, activation="softmax"),
+        head,
     ])
-    model.compile(loss="sparse_categorical_crossentropy",
-                  optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
-                  metrics=["accuracy"])
+    model.compile(loss=loss, optimizer=keras.optimizers.Adam(learning_rate=learning_rate), metrics=metrics)
     return model
 
 
@@ -158,54 +169,95 @@ def move_probabilities(env, model):
 
 
 def value_estimate(env, value_model):
-    """Giá trị thế cờ theo góc người sắp đi, trong [-1, 1]: P(thắng) - P(thua)."""
+    """Giá trị thế cờ theo góc người sắp đi, trong [-1, 1].
+
+    Mạng 3 lớp: P(thắng) - P(thua). Mạng một đầu ra (phiên bản 2): chính giá trị đó.
+    """
     output = np.squeeze(call_model(value_model, encode_conv(env)))
+    if output.size == 1:
+        return float(output)
     return float(output[1] - output[2])
 
 
 # Huấn luyện, đánh giá, lưu và nạp
 
-def train_model(model, dataset, epochs=30, batch_size=128, verbose=1):
+def train_model(model, dataset, epochs=30, batch_size=128, verbose=1, patience=None):
     """Huấn luyện mạng trên tập train, theo dõi trên val, đánh giá trên test.
 
     dataset là dict tạo bởi utils.data.make_dataset (hoặc load_dataset).
+    patience: nếu có, dừng sớm khi val_loss không giảm trong patience epoch liền,
+    rồi lấy lại trọng số ở epoch có val_loss thấp nhất (chỉ nhìn val, không nhìn test).
     Trả về dict báo cáo: đường cong học, loss và accuracy trên val/test, số giây huấn luyện.
     """
+    callbacks = []
+    if patience is not None:
+        callbacks.append(keras.callbacks.EarlyStopping(monitor="val_loss", patience=patience,
+                                                       restore_best_weights=True))
     start = time.time()
     history = model.fit(dataset["X_train"], dataset["y_train"],
                         validation_data=(dataset["X_val"], dataset["y_val"]),
-                        epochs=epochs, batch_size=batch_size, verbose=verbose)
+                        epochs=epochs, batch_size=batch_size, verbose=verbose, callbacks=callbacks)
     seconds = time.time() - start
-    val_loss, val_acc = model.evaluate(dataset["X_val"], dataset["y_val"], verbose=0)
-    test_loss, test_acc = model.evaluate(dataset["X_test"], dataset["y_test"], verbose=0)
+    val_loss, val_metric = model.evaluate(dataset["X_val"], dataset["y_val"], verbose=0)
+    test_loss, test_metric = model.evaluate(dataset["X_test"], dataset["y_test"], verbose=0)
     curve = {}
     for key, values in history.history.items():
         curve[key] = []
         for v in values:
             curve[key].append(float(v))
+    # mạng phân lớp đo accuracy, mạng hồi quy (value phiên bản 2) đo sai số tuyệt đối trung bình (mae)
+    metric = "accuracy" if "accuracy" in curve else "mae"
+    # epoch có val_loss thấp nhất (đánh số từ 1), là trọng số được giữ lại khi dừng sớm
+    best_epoch = int(np.argmin(curve["val_loss"])) + 1
     return {
-        "epochs": epochs, "batch_size": batch_size, "train_seconds": round(seconds, 1),
-        "val_loss": float(val_loss), "val_accuracy": float(val_acc),
-        "test_loss": float(test_loss), "test_accuracy": float(test_acc),
+        "epochs": epochs, "epochs_run": len(curve["loss"]), "best_epoch": best_epoch,
+        "patience": patience, "batch_size": batch_size, "train_seconds": round(seconds, 1),
+        "val_loss": float(val_loss), f"val_{metric}": float(val_metric),
+        "test_loss": float(test_loss), f"test_{metric}": float(test_metric),
         "n_train": int(len(dataset["y_train"])), "n_val": int(len(dataset["y_val"])),
-        "n_test": int(len(dataset["y_test"])),
+        "n_test": int(len(dataset["y_test"])), "mirror": bool(dataset.get("mirror", False)),
         "curve": curve,
     }
 
 
 def train_value(games, path="files/value_conn.keras", epochs=30, batch_size=128,
-                learning_rate=0.0005, seed=0, verbose=1):
+                learning_rate=0.0005, seed=0, verbose=1, mirror=False, patience=None, labeled=None,
+                target="outcome"):
     """Huấn luyện mạng value cho cấp 7 từ ván chuyên gia (kết quả của data.generate_games).
 
-    Nhãn của mỗi thế cờ là kết quả cuối ván nhìn từ người sắp đi (hòa / thắng / thua),
-    chia train/val/test theo ván để không lẫn thế của cùng một ván sang hai tập.
+    target = "outcome": nhãn là kết quả cuối ván nhìn từ người sắp đi (hòa / thắng / thua);
+    có labeled thì thế đã được tìm kiếm chứng minh thắng thua lấy kết quả đó.
+    target = "search_score" (phiên bản 2): hồi quy điểm Alpha-Beta tìm sâu của mọi thế trong labeled,
+    điểm lượng giá đổi sang thang kết quả ván bằng tanh(k × điểm), k chọn trên tập train (data.fit_score_scale).
+    Chia train/val/test theo ván để không lẫn thế của cùng một ván sang hai tập.
     Trả về (model, report); mô hình lưu ở path kèm file báo cáo .json.
     """
     from utils import data
-    dataset = data.make_dataset(games, kind="value", seed=seed)
-    model = build_value_net(learning_rate=learning_rate)
-    report = train_model(model, dataset, epochs=epochs, batch_size=batch_size, verbose=verbose)
+    score_scale = None
+    scale_errors = None
+    if target == "search_score":
+        kind = "search_score"
+        score_scale, scale_errors = data.fit_score_scale(games, labeled, seed=seed)
+    elif labeled is None:
+        kind = "value"
+    else:
+        kind = "search_value"
+    dataset = data.make_dataset(games, kind=kind, seed=seed, mirror=mirror, labeled=labeled,
+                                score_scale=score_scale)
+    model = build_value_net(learning_rate=learning_rate, regression=(kind == "search_score"))
+    report = train_model(model, dataset, epochs=epochs, batch_size=batch_size, verbose=verbose,
+                         patience=patience)
     report["learning_rate"] = learning_rate
+    report["kind"] = kind
+    report["labels_replaced"] = dataset.get("replaced")
+    if kind == "search_score":
+        report["score_scale"] = score_scale
+        # json chỉ nhận khóa chuỗi
+        report["score_scale_errors"] = {str(k): v for k, v in scale_errors.items()}
+        # mốc: luôn đoán trung bình của tập train
+        mean_train = float(np.mean(dataset["y_train"]))
+        report["baseline_test_mse"] = float(np.mean((dataset["y_test"] - mean_train) ** 2))
+        report["baseline_test_mae"] = float(np.mean(np.abs(dataset["y_test"] - mean_train)))
     save_model(model, path, report)
     return model, report
 

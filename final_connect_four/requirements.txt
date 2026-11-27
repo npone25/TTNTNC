@@ -4,3 +4,5 @@ matplotlib
 pandas
 pyyaml
 pytest
+jupyter
+psutil

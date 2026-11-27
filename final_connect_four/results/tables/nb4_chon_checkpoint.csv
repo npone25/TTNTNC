@@ -1,0 +1,14 @@
+﻿checkpoint,score đấu cấp 5
+gd1_lo0250.keras,0.54
+gd1_lo0500.keras,0.62
+gd1_lo0750.keras,0.635
+gd1_lo1000.keras,0.61
+gd1_lo1250.keras,0.645
+gd1_lo1500.keras,0.645
+gd2_lo0250.keras,0.68
+gd2_lo0500.keras,0.655
+gd2_lo0750.keras,0.76
+gd2_lo1000.keras,0.8
+gd2_lo1250.keras,0.76
+gd2_lo1500.keras,0.79
+pg_conn.keras,0.79

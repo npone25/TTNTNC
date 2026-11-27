@@ -3,6 +3,7 @@
 Kế thừa: ba thành phần mạng và cách dùng trong utils/ch17util.py và notebook ch18, sách AlphaGo Simplified (Mark Liu), giấy phép MIT: tiên nghiệm từ mạng policy, mô phỏng bằng mạng policy nhanh tới một độ sâu, đánh giá cuối bằng mạng value.
 Sửa: thay tìm kiếm phẳng ở gốc bằng PUCT trên cây, dùng lõi trong mcts_tree.py; gọi mạng qua nets.call_model (tf.function) thay model.predict.
 Thêm: chế độ cố định số mô phỏng và thời gian; tham số mix trộn giá trị mạng value với giá trị mô phỏng; hai công tắc use_prior, use_value để làm ablation RQ3; ghi LAST_INFO.
+Thêm (phiên bản 2): công tắc win_check, ở mỗi lá nếu người sắp đi có nước thắng ngay thì giá trị lá là +1 chắc chắn, không cần hỏi mạng value (ý tưởng của MCTS-Solver: thế đã biết chắc kết quả thì dùng kết quả đó).
 Phụ trách: Nguyễn Trọng Phúc.
 
 Thành phần AlphaGo đã hiện thực: mạng policy cho tiên nghiệm (học có giám sát, cấp 5; có thể đổi sang mạng
@@ -27,6 +28,7 @@ import math
 import random
 
 from utils import nets
+from utils.alphabeta import immediate_win
 from utils.mcts_tree import run_search, most_visited_move, root_statistics
 
 # Thông tin của nước gần nhất (giải đấu đọc biến này để ghi log)
@@ -100,13 +102,14 @@ def uniform_priors(env):
 
 
 def make_evaluator(prior_model, value_model, fast_model=None, mix=0.5, rollout_depth=10,
-                   use_prior=True, use_value=True):
+                   use_prior=True, use_value=True, win_check=False):
     """Tạo hàm đánh giá lá cho lõi cây.
 
     Tiên nghiệm: từ mạng policy nếu use_prior, ngược lại chia đều.
     Giá trị lá khi use_value: (1 - mix) * giá trị mạng value + mix * giá trị mô phỏng.
         mix = 0: chỉ dùng mạng value (nhanh nhất). mix = 1: chỉ dùng mô phỏng.
     Giá trị lá khi tắt use_value: mô phỏng tới HẾT ván, không dùng mạng value.
+    win_check: người sắp đi ở lá có nước thắng ngay thì giá trị lá là +1 (biết chắc, không cần đánh giá).
     """
     def evaluate_leaf(env):
         # tiên nghiệm: mạng policy gợi ý cột nào đáng thử, dùng cho bước mở rộng
@@ -114,6 +117,8 @@ def make_evaluator(prior_model, value_model, fast_model=None, mix=0.5, rollout_d
             priors = nets.move_probabilities(env, prior_model)
         else:
             priors = uniform_priors(env)
+        if win_check and immediate_win(env) is not None:
+            return priors, 1.0
         if not use_value:
             # ván Connect Four dài tối đa 42 nước nên mô phỏng 42 nước luôn tới hết ván
             return priors, rollout_value(env, fast_model, None, 42)
@@ -129,7 +134,7 @@ def make_evaluator(prior_model, value_model, fast_model=None, mix=0.5, rollout_d
 
 def alphago_tree(env, prior_model, value_model, fast_model=None, num_simulations=None,
                  time_limit=None, c_puct=1.5, mix=0.5, rollout_depth=10,
-                 use_prior=True, use_value=True):
+                 use_prior=True, use_value=True, win_check=False):
     """Tác tử cấp 7. Nhận env, trả về cột 1-7. Không làm thay đổi env.
 
     Mặc định 200 mô phỏng nếu không chỉ định chế độ nào.
@@ -142,7 +147,7 @@ def alphago_tree(env, prior_model, value_model, fast_model=None, num_simulations
         return env.validinputs[0]
 
     evaluate_leaf = make_evaluator(prior_model, value_model, fast_model, mix, rollout_depth,
-                                   use_prior, use_value)
+                                   use_prior, use_value, win_check)
 
     def select_child(node):
         return puct_select_child(node, c_puct)

@@ -1,8 +1,8 @@
 """Cấp 3: Minimax với cắt tỉa Alpha-Beta, giới hạn độ sâu.
 
-Kế thừa: max_payoff_conn và MiniMax_conn trong utils/ch06util.py, sách AlphaGo Simplified (Mark Liu), giấy phép MIT.
-Sửa: viết lại theo dạng Negamax (một hàm cho cả hai bên); dùng step/undo trên một bản sao thay deepcopy ở mỗi nút.
-Thêm: hàm lượng giá khi chạm độ sâu (sách trả về 0); cờ prune bật/tắt cắt tỉa; bộ đếm nút; sắp xếp nước đi từ cột giữa; chế độ giới hạn thời gian (đào sâu dần) cho RQ1.
+Kế thừa: ý tưởng Minimax giới hạn độ sâu và cắt tỉa Alpha-Beta (max_payoff_conn, MiniMax_conn trong utils/ch06util.py, chương 5-6), sách AlphaGo Simplified (Mark Liu), giấy phép MIT.
+Sửa: viết lại theo dạng Negamax (một hàm cho cả hai bên); dùng step/undo trên một bản sao thay deepcopy ở mỗi nút; chọn nước theo điểm cao nhất thay vì gom thắng/hòa/thua.
+Thêm: hàm lượng giá khi chạm độ sâu, đếm số đường thắng còn mở (chương 5-6 của sách coi là hòa, chương 7 dùng mạng value ở chỗ này); cờ prune bật/tắt cắt tỉa; bộ đếm nút; sắp xếp nước đi từ cột giữa; chế độ giới hạn thời gian (đào sâu dần) cho RQ1.
 Phụ trách: Phạm Thiên Phúc.
 
 Cách dùng:
@@ -19,19 +19,13 @@ cho cả hai bên, không phải tách nhánh max và min như sách.
 import random
 import time
 
-# Thứ tự xét nước: từ giữa ra hai biên. Nước giữa thường tốt hơn, xét trước thì
-# alpha tăng sớm và cắt tỉa được nhiều nhánh hơn.
+# Thứ tự xét nước: từ giữa ra hai biên. Nước giữa thường tốt hơn, xét trước thì alpha tăng sớm và cắt tỉa được nhiều nhánh hơn.
+
 MOVE_ORDER = [4, 3, 5, 2, 6, 1, 7]
 
-# Điểm của thế đã phân thắng thua. Hàm lượng giá luôn nằm trong (-1, 1)
+# Điểm của thế đã phân thắng thua. Hàm lượng giá luôn nằm trong [-0.75, 0.75]
 # nên một thế thắng thật luôn được ưu tiên hơn một thế "trông có vẻ tốt".
 WIN_SCORE = 1.0
-
-# Trọng số cho mỗi cửa sổ 4 ô (chỉ tính cửa sổ chưa có quân đối thủ)
-WEIGHT_THREE = 5      # 3 quân + 1 ô trống: sắp thành 4
-WEIGHT_TWO = 2        # 2 quân + 2 ô trống
-WEIGHT_CENTER = 3     # mỗi quân ở cột 4 (cột giữa nằm trong nhiều cửa sổ nhất)
-SCORE_SCALE = 100.0   # chia điểm thô cho số này rồi kẹp vào [-0.9, 0.9]
 
 # Thông tin của nước gần nhất (giải đấu đọc biến này để ghi log)
 LAST_INFO = {}
@@ -57,43 +51,39 @@ def all_windows():
 # Tính sẵn một lần, hàm lượng giá dùng lại ở mọi nút lá
 WINDOWS = all_windows()
 
+# Tổng số ô của mọi cửa sổ: 69 x 4 = 276. Khi ván chưa kết thúc, mỗi cửa sổ còn mở có
+# tối đa 3 quân của một bên, nên điểm thô của một bên không vượt 69 x 3 = 207.
+# Chia 276 thì điểm luôn nằm trong [-0.75, 0.75], nhỏ hơn thắng thật (1).
+TOTAL_SLOTS = 4 * len(WINDOWS)
+
 
 def evaluate(env):
     """Hàm lượng giá khi chạm độ sâu: thế cờ này tốt hay xấu cho người SẮP ĐI.
 
-    Cộng điểm cho các cửa sổ còn "mở" của mình (chưa có quân đối thủ), trừ điểm
-    cho cửa sổ mở của đối thủ, cộng thêm quân ở cột giữa. Kết quả nằm trong [-0.9, 0.9].
+    Mỗi quân được 1 điểm cho mỗi đường thắng (cửa sổ 4 ô) còn mở đi qua nó, tức cửa sổ
+    chưa có quân đối thủ. Lấy điểm của mình trừ điểm của đối thủ rồi chia TOTAL_SLOTS.
+    Không có trọng số tự chọn: quân ở giữa bàn nằm trong nhiều đường hơn nên tự được
+    nhiều điểm hơn, cửa sổ có 3 quân tự được nhiều điểm hơn cửa sổ có 2 quân.
     """
-    me = 1 if env.turn == "red" else -1
+    me = 1 if env.turn == "red" else -1 #kiểm tra xem lượt của ai 
     state = env.state
     score = 0
     for cells in WINDOWS:
-        mine = 0
-        theirs = 0
+        mine = 0      #điểm của tôi
+        theirs = 0	#điểm đối thủ 
         for col, row in cells:
             value = state[col][row]
             if value == me:
                 mine += 1
             elif value == -me:
                 theirs += 1
-        # cửa sổ có quân của cả hai bên thì không ai dùng được nữa
-        if mine > 0 and theirs > 0:
-            continue
-        if mine == 3:
-            score += WEIGHT_THREE
-        elif mine == 2:
-            score += WEIGHT_TWO
-        elif theirs == 3:
-            score -= WEIGHT_THREE
-        elif theirs == 2:
-            score -= WEIGHT_TWO
-    for row in range(6):
-        if state[3][row] == me:
-            score += WEIGHT_CENTER
-        elif state[3][row] == -me:
-            score -= WEIGHT_CENTER
-    value = score / SCORE_SCALE
-    return max(-0.9, min(0.9, value))
+        # cửa sổ chưa có quân đối thủ: còn là đường thắng của mình
+        if theirs == 0:
+            score += mine
+        # cửa sổ chưa có quân của mình: còn là đường thắng của đối thủ
+        if mine == 0:
+            score -= theirs
+    return score / TOTAL_SLOTS
 
 
 def ordered_moves(env):

@@ -185,3 +185,18 @@ def test_cap7_tat_prior_thi_tien_nghiem_deu():
     priors = cap7.LAST_INFO["priors"]
     for p in priors.values():
         assert p == pytest.approx(1 / 7, abs=1e-3)
+
+
+def test_cap7_kiem_tra_thang_ngay_o_la():
+    # đỏ đi cột 4 thì vàng thắng ngay; mạng policy giả lại dồn 0.9 vào cột 4.
+    # Tắt win_check, 50 mô phỏng chưa đủ để thấy; bật thì lá sau cột 4 có giá trị chắc chắn cho vàng.
+    from utils import alphago_tree as cap7
+    env = conn.from_moves([6, 5, 7, 6, 3, 5, 3, 7])
+    set_seed(0)
+    with_check = cap7.alphago_tree(env, FakePolicy(4, 0.9), FakeValue(), None, num_simulations=50,
+                                   mix=0.0, win_check=True)
+    set_seed(0)
+    without_check = cap7.alphago_tree(env, FakePolicy(4, 0.9), FakeValue(), None, num_simulations=50,
+                                      mix=0.0, win_check=False)
+    assert with_check != 4
+    assert without_check == 4

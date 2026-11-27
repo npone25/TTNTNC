@@ -4,7 +4,8 @@ Kế thừa: notebook ch15 (playing_red, playing_yellow, discount_rs, vòng hu�
 Sửa: chỉ rút nước trong các cột hợp lệ (sách cho rút cả cột đầy rồi phạt -1, tốn nhiều ván vô ích);
      một hàm chơi cho cả hai màu thay cho playing_red/playing_yellow; đối thủ giai đoạn 1 là mô hình cấp 5 do nhóm tự huấn luyện.
 Thêm: giai đoạn 2 tự chơi với các checkpoint cũ của chính nó; lưu checkpoint đều đặn; ghi đường cong học
-      (phần thưởng trung bình mỗi lô và điểm số khi đấu với đối thủ cố định). Mạng tạo bằng nets.build_pg_net().
+      (phần thưởng trung bình mỗi lô và điểm số khi đấu với đối thủ cố định, mỗi ván mở đầu 2 nước ngẫu nhiên có seed);
+      phiên bản 2 khởi tạo từ mạng cấp 5 (như AlphaGo: mạng RL bắt đầu từ mạng học có giám sát) rồi mới tự chơi. Mạng tạo bằng nets.build_pg_net().
 Phụ trách: Trần Quỳnh Hương.
 
 Ý tưởng REINFORCE:
@@ -115,10 +116,16 @@ def reinforce_update(model, optimizer, steps, returns):
     rets = np.array(returns, dtype=np.float32)
 
     with tf.GradientTape() as tape:
-        probs = model([flats, convs], training=True)
+        # mạng hai đầu vào (kiến trúc ch15 của sách) hoặc một đầu vào (khởi tạo từ mạng cấp 5)
+        if nets.is_two_input(model):
+            probs = model([flats, convs], training=True)
+        else:
+            probs = model(convs, training=True)
         # bỏ cột đầy rồi chuẩn hóa lại, đúng như phân phối đã dùng để rút nước
         masked = probs * masks
-        masked = masked / tf.reduce_sum(masked, axis=1, keepdims=True)
+        # cộng 1e-8 vào mẫu: mạng quá chắc chắn vào một cột đầy thì tổng xác suất các cột hợp lệ
+        # gần bằng 0, chia cho 0 ra NaN và làm hỏng toàn bộ trọng số
+        masked = masked / (tf.reduce_sum(masked, axis=1, keepdims=True) + 1e-8)
         chosen = tf.gather(masked, actions, axis=1, batch_dims=1)
         log_probs = tf.math.log(chosen + 1e-8)
         loss = -tf.reduce_mean(log_probs * rets)
@@ -136,6 +143,18 @@ def evaluate_against(model, opponent, n_games=20, seed=0):
 
     def agent(env):
         return pg_move(env, model)
+
+    def with_opening(fn):
+        # 2 nước đầu ván đi ngẫu nhiên (play_game đặt seed nên vẫn tái lập được);
+        # không có thì mạng và đối thủ tất định chỉ chơi đi chơi lại đúng 2 ván
+        def wrapped(env):
+            if len(env.history) < 2:
+                return random.choice(env.validinputs)
+            return fn(env)
+        return wrapped
+
+    agent = with_opening(agent)
+    opponent = with_opening(opponent)
 
     points = 0.0
     for g in range(n_games):
@@ -163,7 +182,7 @@ def train_stage(model, make_opponent, n_batches, games_per_batch=10, gamma=0.95,
     Trả về dict đường cong học của giai đoạn.
     """
     if optimizer is None:
-        optimizer = keras.optimizers.Adam(learning_rate=0.00025)
+        optimizer = keras.optimizers.Adam(learning_rate=0.00025, clipnorm=1.0)
     if checkpoint_paths is None:
         checkpoint_paths = []
     curve = {"batch": [], "mean_reward": [], "loss": [], "eval": []}
@@ -214,7 +233,8 @@ def train_two_stages(model, level5_model, stage1_batches=300, stage2_batches=300
     Giai đoạn 2: tự chơi; mỗi ván rút ngẫu nhiên một trong pool_size checkpoint gần nhất làm đối thủ.
     Đấu với bản cũ của chính mình tránh việc chỉ học cách thắng đúng một đối thủ.
     """
-    optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
+    # clipnorm: giới hạn độ lớn gradient mỗi bước để một lô bất thường không làm mạng "nổ"
+    optimizer = keras.optimizers.Adam(learning_rate=learning_rate, clipnorm=1.0)
     checkpoint_paths = []
 
     def level5_opponent():

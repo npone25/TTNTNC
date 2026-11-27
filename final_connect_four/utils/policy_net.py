@@ -2,7 +2,8 @@
 
 Kế thừa: cách dùng mạng policy để chọn nước ở notebook ch11 và ch15 (hàm opponent), sách AlphaGo Simplified (Mark Liu), giấy phép MIT.
 Sửa: chỉ chọn trong các cột hợp lệ; mặc định đi cột có xác suất lớn nhất (sách luôn rút mẫu); có seed.
-Thêm: hàm tác tử nhận env trả về cột; hàm huấn luyện gọn cho nb3, dùng dữ liệu của data.py và hàm mạng trong nets.py.
+Thêm: hàm tác tử nhận env trả về cột; hàm huấn luyện gọn cho nb3, dùng dữ liệu của data.py và hàm mạng trong nets.py;
+      phiên bản 2 học nhãn Alpha-Beta tìm sâu ở mọi thế cờ.
 Phụ trách: Trần Quỳnh Hương.
 
 Cách dùng:
@@ -42,16 +43,22 @@ def policy_move(env, model, sample=False):
 
 
 def train_policy(games, path="files/policy_conn.keras", epochs=30, batch_size=128,
-                 learning_rate=0.001, seed=0, verbose=1):
+                 learning_rate=0.001, seed=0, verbose=1, mirror=False, patience=None, labeled=None):
     """Huấn luyện mạng cấp 5 từ danh sách ván chuyên gia (kết quả của data.generate_games).
 
     Các bước: tạo mẫu (thế cờ, nước của bên thắng), chia train/val/test theo ván,
     huấn luyện, đánh giá trên val và test, lưu mô hình kèm báo cáo.
+    mirror: thêm bản lật gương vào tập train; patience: dừng sớm theo val_loss (xem nets.train_model).
+    labeled (phiên bản 2): kết quả data.label_positions; khi có thì nhãn là cột tốt nhất theo
+    Alpha-Beta tìm sâu ở mọi thế cờ, thay cho nước của bên thắng.
     Trả về (model, report).
     """
-    dataset = data.make_dataset(games, kind="policy", seed=seed)
+    kind = "policy" if labeled is None else "search_policy"
+    dataset = data.make_dataset(games, kind=kind, seed=seed, mirror=mirror, labeled=labeled)
     model = nets.build_policy_net(learning_rate=learning_rate)
-    report = nets.train_model(model, dataset, epochs=epochs, batch_size=batch_size, verbose=verbose)
+    report = nets.train_model(model, dataset, epochs=epochs, batch_size=batch_size, verbose=verbose,
+                              patience=patience)
     report["learning_rate"] = learning_rate
+    report["kind"] = kind
     nets.save_model(model, path, report)
     return model, report

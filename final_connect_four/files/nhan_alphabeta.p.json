@@ -1,0 +1,14 @@
+{
+ "depth": 5,
+ "processes": 14,
+ "n_positions": 66314,
+ "machine": {
+  "system": "Windows",
+  "release": "11",
+  "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+  "cpu_count": 16,
+  "python": "3.13.5"
+ },
+ "n_done": 66314,
+ "seconds": 2169.1
+}

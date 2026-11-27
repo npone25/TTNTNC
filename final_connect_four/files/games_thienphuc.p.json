@@ -1,0 +1,15 @@
+{
+ "seed": 3,
+ "n_games_target": 1000,
+ "minimax_depth": 3,
+ "mcts_simulations": 1000,
+ "machine": {
+  "system": "Windows",
+  "release": "11",
+  "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+  "cpu_count": 16,
+  "python": "3.13.5"
+ },
+ "n_games_done": 1000,
+ "seconds": 3782.6
+}

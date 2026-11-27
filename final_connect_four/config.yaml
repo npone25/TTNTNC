@@ -30,52 +30,89 @@ agents:
     prior_model: files/policy_conn.keras   # đổi sang files/pg_conn.keras khi cấp 6 xong để thử
     value_model: files/value_conn.keras
     fast_model: files/policy_conn.keras
-    params: {num_simulations: 200, c_puct: 1.5, mix: 0.5, rollout_depth: 10}
+    # win_check (phiên bản 2): lá có nước thắng ngay thì giá trị +1 chắc chắn
+    # c_puct 0.5 chọn ở nb5 mục 2 (60 ván thử với cấp 4, seed 900)
+    params: {num_simulations: 200, c_puct: 0.5, mix: 0.0, rollout_depth: 10, win_check: true}
 
 # Giải vòng tròn cấp 1-7 (nb6)
 tournament:
   agents: [cap1, cap2, cap3, cap4, cap5, cap6, cap7]
   games_per_pair: 200
+  seed: 0
+  # mỗi ván mở đầu bằng 2 nước ngẫu nhiên có seed (đỏ 1, vàng 1), để các tác tử tất định
+  # (cấp 5, 6 luôn đi cột xác suất cao nhất) không lặp lại cùng một ván suốt 200 ván
+  opening_random_moves: 2
 
 # RQ1: cấp 3 với cấp 4 ở cùng thời gian mỗi nước (nb2)
 rq1:
   time_limits: [0.2, 0.5, 1.0]
   games_per_pair: 200
+  seed: 100
 
 # Hai ablation bắt buộc (nb2)
 ablation_pruning:
   depths: [2, 3, 4, 5]
   positions: 50
+  seed: 50
 ablation_mcts_simulations:
   simulations: [25, 50, 100, 200, 400, 800, 1600]
   opponent: cap2
   games_per_pair: 100
+  seed: 200
+
+# Phân tích độ nhạy hàm lượng giá của cấp 3 (nb2). Seed riêng, không dùng ván của giải đấu cuối.
+ablation_eval:
+  variants: [quan_x_duong_mo, duong_mo, trong_so_5_2_3, khong_luong_gia]
+  opponent: cap2
+  games_per_pair: 100
+  opening_random_moves: 2
+  seed: 300
+
+# RQ2: cấp 6 so với cấp 5 (nb4)
+rq2:
+  opponents: [cap1, cap2, cap3, cap4]
+  games_per_pair: 200
+  opening_random_moves: 2
+  seed: 400
 
 # RQ3: cấp 7 so với cấp 4 và cấp 5 (nb5)
 rq3:
   simulations: [50, 200, 800]
   time_limits: [0.2, 0.5, 1.0]
   games_per_pair: 200
-  opponent: cap3
+  opponent: cap3                 # đối thủ chung cho bốn cấu hình ablation của cấp 7
+  opening_random_moves: 2
+  seed: 500
+
+# Chọn tham số cấp 7 bằng ván thử riêng với đối thủ chung, seed riêng, trước RQ3 và giải đấu.
+# Phiên bản 1 chỉ so mix 0.0 với 0.5 (đấu nhau) và chọn 0.0.
+# mix giữ 0.0 như phiên bản 1 (0.5 không mạnh hơn rõ rệt mà chậm gấp 5 lần), chỉ dò c_puct.
+# lần đầu dò {1.0, 1.5, 3.0}: 1.0 tốt nhất và nằm ở mép dải, nên mở rộng xuống 0.5, 0.7
+cap7_pilot:
+  c_puct: [0.5, 0.7, 1.0, 1.5]
+  opponent: cap4
+  games: 60
+  opening_random_moves: 2
+  seed: 900
 
 # RQ3: bốn cấu hình ablation của cấp 7 (cùng hàm alphago_tree, chỉ khác hai công tắc)
 rq3_ablation:
   mcts_thuan:
     type: cap7
-    params: {num_simulations: 200, use_prior: false, use_value: false}
+    params: {num_simulations: 200, use_prior: false, use_value: false, win_check: true}
   them_prior:
     type: cap7
     prior_model: files/policy_conn.keras
-    params: {num_simulations: 200, use_prior: true, use_value: false}
+    params: {num_simulations: 200, use_prior: true, use_value: false, win_check: true}
   them_value:
     type: cap7
     value_model: files/value_conn.keras
-    params: {num_simulations: 200, use_prior: false, use_value: true, mix: 0.0}
+    params: {num_simulations: 200, use_prior: false, use_value: true, mix: 0.0, win_check: true}
   day_du:
     type: cap7
     prior_model: files/policy_conn.keras
     value_model: files/value_conn.keras
-    params: {num_simulations: 200, use_prior: true, use_value: true, mix: 0.0}
+    params: {num_simulations: 200, use_prior: true, use_value: true, mix: 0.0, win_check: true}
 
 # Sinh dữ liệu cấp 5 (utils/data.py). Mỗi máy chạy một phần với seed khác nhau rồi gộp.
 data:
@@ -83,13 +120,48 @@ data:
   minimax_depth: 3
   mcts_simulations: 1000
   seeds: {phuc: 1, huong: 2, thienphuc: 3}
+  # phiên bản 2: gán nhãn mọi thế cờ của 3000 ván bằng Alpha-Beta tìm sâu (nhìn trước 6 nước),
+  # chạy song song; label_processes rỗng = số nhân CPU trừ 2
+  label_depth: 5
+  label_processes:
 
 # Huấn luyện (utils/nets.py)
+# epochs là số epoch tối đa; patience: dừng khi val_loss không giảm trong 5 epoch liền,
+# lấy lại trọng số tốt nhất (lần chạy đầu không dừng sớm: val_loss thấp nhất ở epoch 6 rồi tăng)
+# mirror: thêm bản lật gương bàn cờ vào tập train
 train_policy:
   epochs: 30
   batch_size: 128
   learning_rate: 0.001
+  patience: 5
+  mirror: true
+# target: outcome = học kết quả ván (3 lớp, như sách; phiên bản 1 và lần đầu phiên bản 2: học thuộc từ epoch 1-2,
+# test acc 0,69, kéo cấp 7 xuống); search_score = hồi quy điểm Alpha-Beta tìm sâu trên các thế đã gán nhãn
 train_value:
   epochs: 30
   batch_size: 128
   learning_rate: 0.0005
+  patience: 5
+  mirror: true
+  target: search_score
+  # thêm thế cờ từ ván tự chơi của mạng cấp 5 (mỗi nước 10% đi ngẫu nhiên), gán nhãn cùng cách
+  self_play_games: 3000
+  self_play_random_prob: 0.1
+  self_play_seed: 7
+# Phiên bản 1 (tag v1-ket-qua): mạng hai đầu vào khởi tạo ngẫu nhiên, 1500 + 1500 lô, learning_rate 0.00025;
+# không vượt được cấp 5. Phiên bản 2: khởi tạo từ mạng cấp 5 (init_from_cap5) như AlphaGo,
+# learning rate nhỏ để không phá kiến thức sẵn có, cuối cùng chọn checkpoint tốt nhất bằng
+# select_games ván với cấp 5 (seed riêng select_seed, không trùng ván RQ2 và giải đấu)
+train_pg:
+  init_from_cap5: true
+  stage1_batches: 1500
+  stage2_batches: 1500
+  games_per_batch: 10
+  gamma: 0.95
+  learning_rate: 0.00005
+  pool_size: 5
+  eval_every: 100
+  checkpoint_every: 250
+  select_games: 100
+  select_seed: 5000
+  seed: 2026
