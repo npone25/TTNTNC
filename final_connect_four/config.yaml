@@ -31,7 +31,8 @@ agents:
     value_model: files/value_conn.keras
     fast_model: files/policy_conn.keras
     # win_check (phiên bản 2): lá có nước thắng ngay thì giá trị +1 chắc chắn
-    params: {num_simulations: 200, c_puct: 1.5, mix: 0.0, rollout_depth: 10, win_check: true}
+    # c_puct 0.5 chọn ở nb5 mục 2 (60 ván thử với cấp 4, seed 900)
+    params: {num_simulations: 200, c_puct: 0.5, mix: 0.0, rollout_depth: 10, win_check: true}
 
 # Giải vòng tròn cấp 1-7 (nb6)
 tournament:

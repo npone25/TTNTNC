@@ -81,4 +81,41 @@ Phiên bản 2 (`a3726a5`) giữ nguyên 3000 ván và đổi ba điểm:
 
 ## Phiên bản 2
 
-(Điền khi chạy xong.)
+### Cấp 5 (nb3, `88fd114`)
+
+- Gán nhãn 66.314 thế bằng Alpha-Beta độ sâu 5, 14 tiến trình, 2169 s. Trong đó 11,7% thế người sắp đi thắng chắc, 10,4% thua chắc trong tầm nhìn.
+- Huấn luyện: dừng ở epoch 12, giữ epoch 7; test acc 0,588 (lần 2 của phiên bản 1: 0,505). Đấu 100 ván: cấp 1 được 0,91, cấp 2 được 0,16, cấp 3 được 0,17 (30 ván hòa).
+- Chiến thuật đúng 30%, bằng đúng phiên bản 1 nhưng là do trùng hợp: hai mô hình trả lời khác nhau ở 14/40 thế. Bộ 40 thế chiến thuật sinh từ ván ngẫu nhiên, khác xa thế trong ván chuyên gia mà mạng được học, nên đây là bài kiểm tra ngoài phân phối.
+
+### Cấp 6 (nb4)
+
+- Khởi tạo bằng bản sao mạng cấp 5, learning rate 0,00005, 1500 + 1500 lô (732 s + 869 s), không còn lỗi NaN.
+- Chọn checkpoint bằng 100 ván riêng với cấp 5 (seed 5000): score tăng từ 0,54 (giai đoạn 1, lô 250) lên 0,80 (giai đoạn 2, lô 1000); mô hình cuối được 0,79. Giữ `gd2_lo1000`.
+- RQ2, 200 ván mỗi cặp: cấp 6 thắng cấp 5 với score 0,74 [0,68; 0,80]. Trước đối thủ chung, cấp 6 không hơn cấp 5: cấp 1 được 0,83 so với 0,85; cấp 2 được 0,09 so với 0,13; cấp 3 được 0,035 so với 0,20; cấp 4 được 0,02 so với 0,04. Chiến thuật đúng 32,5% (cấp 5: 30%).
+- Nhận xét: học tăng cường bằng cách đấu cấp 5 và checkpoint của chính nó làm cấp 6 giỏi khai thác điểm yếu của cấp 5, nhưng không giỏi hơn trước đối thủ khác.
+
+### Cấp 7, lần 1 (dừng giữa chừng; kết quả ở `results/v2_lan1/`, mạng value ở `files/v2_lan1/`)
+
+- Mạng value 3 lớp học kết quả ván, có thay nhãn bằng kết quả tìm kiếm chứng minh (chỉ 196 thế đổi nhãn). Dừng ở epoch 7, giữ epoch 2; test acc 0,690. Từ epoch 2, val_loss tăng trong khi train acc lên 0,84: mạng học thuộc ván.
+- Dò `c_puct` bằng 60 ván với cấp 4: 1,0 được 0,425; 1,5 được 0,308; 3,0 được 0,275. Giá trị tốt nhất nằm ở mép dải, và ở mọi giá trị cấp 7 đều thua cấp 4.
+- Dừng nb5 khi ablation đã chạy 341/800 ván, vì có thể sửa được nguyên nhân.
+
+### Chẩn đoán trước lần 2
+
+Kiểm tra nhanh trên máy ảo (2 nhân, Linux), cấp 7 đấu cấp 4, 30 ván cùng khai cuộc (seed 900). Các ván này chỉ để định hướng, không dùng làm kết quả:
+
+- Mạng value hồi quy điểm Alpha-Beta (chỉ thế chuyên gia): test MSE 0,159, mốc luôn đoán trung bình 0,282. Score 0,45.
+- Soi 15 ván thua bằng Alpha-Beta độ sâu 5: 8 ván cấp 7 đi một nước dẫn tới thua chắc trong 6 nước, dù vẫn còn nước không thua. Ví dụ: vàng có hai quân liền nhau ở hàng đáy với hai đầu trống, cấp 7 không chặn, vàng tạo hàng ba mở hai đầu.
+- Thêm kiểm tra thắng ngay ở lá (`win_check`): score 0,533; còn 5 ván có nước thua chắc như trên.
+- Thêm vào tập học mạng value 18.899 thế mới từ 1000 ván tự chơi của cấp 5, gán nhãn cùng cách. Trên cùng tập test chỉ gồm thế chuyên gia, MSE giảm từ 0,147 xuống 0,135. Score cùng 30 ván: 0,750 [0,57; 0,87].
+
+### Cấp 7, lần 2: thay đổi
+
+- Mạng value học điểm Alpha-Beta tìm sâu 5 (hồi quy, đầu ra tanh, loss MSE) thay cho kết quả ván. Thế thắng chắc hoặc thua chắc lấy +1 hoặc −1. Thế còn lại lấy tanh(k × điểm lượng giá), với k chọn trên tập train sao cho gần kết quả ván nhất. Trên máy ảo, k được chọn là 10.
+- Thêm thế cờ từ 3000 ván tự chơi của mạng cấp 5: rút nước theo xác suất của mạng, mỗi nước có 10% khả năng đi ngẫu nhiên, seed 7. Các thế mới được gán nhãn cùng cách. Lý do: ván chuyên gia hiếm khi có thế sau một nước sai, trong khi cây tìm kiếm phải chấm cả những thế đó. AlphaGo lấy dữ liệu value theo cách tương tự.
+- `win_check` bật cho cấp 7 và cho cả bốn cấu hình ablation, để ablation vẫn chỉ khác ở prior và value. Ngoài ra, nb5 chơi lại các ván thử với `win_check` tắt để đo riêng tác dụng của nó.
+- Dải `c_puct` mở rộng thành {0,5; 0,7; 1,0; 1,5}.
+
+### Cấp 7, lần 2: kết quả
+
+(Điền khi nb5 chạy xong.)

@@ -14,7 +14,7 @@ Repository: https://github.com/npone25/TTNTNC (thư mục `final_connect_four`)
 | Mã nguồn | `utils/` (engine, 7 tác tử, mạng, giải đấu), `play.py` (demo), `tests/` (kiểm thử) |
 | File cấu hình | `config.yaml`: tham số từng cấp, số ván, seed, ngân sách tính toán |
 | Hướng dẫn cài đặt, chạy | mục 1 đến 4 của file này |
-| Dataset | `files/games_*.p` (3000 ván chuyên gia), `files/nhan_alphabeta.p` (66.314 thế gán nhãn bằng Alpha-Beta tìm sâu); thông tin sinh dữ liệu trong các file `.json` đi kèm |
+| Dataset | `files/games_*.p` (3000 ván chuyên gia), `files/nhan_alphabeta.p` (66.314 thế gán nhãn bằng Alpha-Beta tìm sâu), `files/tu_choi_cap5.p` (3000 ván tự chơi của cấp 5) và `files/nhan_alphabeta_tu_choi.p` (53.845 thế mới từ các ván đó, gán nhãn cùng cách); thông tin sinh dữ liệu trong các file `.json` đi kèm |
 | Notebook | `nb1` … `nb7` ở thư mục gốc, đã chạy, giữ nguyên output |
 | Mô hình đã huấn luyện | `files/policy_conn.keras` (cấp 5), `files/pg_conn.keras` (cấp 6), `files/value_conn.keras` (mạng value cấp 7), mỗi mô hình kèm `.json` ghi siêu tham số, đường cong học, thời gian huấn luyện, cấu hình máy |
 | Kết quả thực nghiệm | `results/logs/` (log thô từng ván), `results/tables/` (bảng CSV) |
@@ -27,7 +27,7 @@ Repository: https://github.com/npone25/TTNTNC (thư mục `final_connect_four`)
 ### Hai phiên bản
 
 - **Phiên bản 1** (tag git `v1-ket-qua`; kết quả trong `results/v1/`, mô hình trong `files/v1/`): cấp 5 học nước đi của bên thắng trong ván chuyên gia, cấp 6 học tăng cường từ trọng số ngẫu nhiên.
-- **Phiên bản 2** (hiện tại): cấp 5 học nhãn Alpha-Beta tìm sâu ở mọi thế cờ, cấp 6 khởi tạo từ cấp 5 rồi học tăng cường, cấp 7 dùng mạng value có nhãn được tìm kiếm chứng minh và `c_puct` chọn bằng ván thử riêng.
+- **Phiên bản 2** (hiện tại): cấp 5 học nhãn Alpha-Beta tìm sâu ở mọi thế cờ; cấp 6 khởi tạo từ cấp 5 rồi học tăng cường; cấp 7 dùng mạng value hồi quy điểm Alpha-Beta tìm sâu trên thế chuyên gia và thế tự chơi, kiểm tra thắng ngay ở lá, `c_puct` chọn bằng ván thử riêng. Lần đầu của cấp 7 trong phiên bản này (mạng value học kết quả ván) được giữ ở `results/v2_lan1/` và `files/v2_lan1/`.
 
 Lý do và số liệu của từng bước nằm trong `docs/NHAT_KY_THI_NGHIEM.md`.
 
@@ -75,8 +75,8 @@ Thứ tự chạy (notebook sau dùng kết quả của notebook trước):
    tìm sâu (chạy song song), huấn luyện cấp 5, lưu `files/policy_conn.keras`.
 4. `nb4_cap6_rq2`: cấp 6 khởi tạo từ cấp 5, học tăng cường hai giai đoạn (đấu cấp 5, rồi tự chơi với
    checkpoint cũ), chọn checkpoint tốt nhất, lưu `files/pg_conn.keras`; RQ2.
-5. `nb5_cap7_rq3`: mạng value `files/value_conn.keras`; chọn `c_puct` bằng ván thử riêng;
-   bốn cấu hình ablation của cấp 7; RQ3.
+5. `nb5_cap7_rq3`: sinh ván tự chơi của cấp 5 và gán nhãn thế mới; mạng value `files/value_conn.keras`;
+   chọn `c_puct` bằng ván thử riêng, đo tác dụng của kiểm tra thắng ngay; bốn cấu hình ablation của cấp 7; RQ3.
 6. `nb6_giai_dau_tong_hop`: giải vòng tròn cấp 1-7, ma trận đối đầu, ảnh hưởng bên đi trước,
    chi phí tính toán, độ chính xác chiến thuật, ván minh họa.
 7. `nb7_anh_huong_seed`: ảnh hưởng của seed huấn luyện (cấp 5) và seed ván đấu (cấp 4 đấu cấp 3).
