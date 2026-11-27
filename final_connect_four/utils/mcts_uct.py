@@ -32,6 +32,7 @@ def uct_select_child(node, temperature=1.4):
     thử rộng hơn, nhỏ thì dồn vào nước đang tốt.
     Con chưa thăm lần nào được ưu tiên trước (giống sách), chọn ngẫu nhiên giữa chúng.
     """
+    #để thăm tất cả con trước khi tính UCT, tránh bỏ sót nước hay chỉ vì vài lần đầu xui
     unvisited = []
     for child in node.children.values():
         if child.visits == 0:
@@ -44,7 +45,7 @@ def uct_select_child(node, temperature=1.4):
     log_parent = math.log(node.visits)
     for child in node.children.values():
         score = child.q() + temperature * math.sqrt(log_parent / child.visits)
-        if best_score is None or score > best_score:
+        if best_score is None or score > best_score: #lặp hết tất cả con, chọn con có điểm UCT cao nhất; bằng nhau thì chọn ngẫu nhiên
             best_score = score
             best_children = [child]
         elif score == best_score:
@@ -66,7 +67,7 @@ def random_rollout_value(env):
         sim_env.step(random.choice(sim_env.validinputs))
     if sim_env.reward == 0:
         return 0.0
-    red_won = sim_env.reward == 1
+    red_won = sim_env.reward == 1 #quy ước là không quan tâm người chơi nào là đỏ, chỉ quan tâm người vừa đi nước dẫn tới lá có thắng hay không
     if (red_won and player_to_move == "red") or (not red_won and player_to_move == "yellow"):
         return 1.0
     return -1.0
@@ -89,7 +90,7 @@ def mcts_uct(env, num_simulations=None, time_limit=None, temperature=1.4):
     """
     global LAST_INFO
     if num_simulations is None and time_limit is None:
-        num_simulations = 400
+        num_simulations = 400 #
     # chỉ còn một nước thì đi luôn, khỏi tìm kiếm (giống sách)
     if len(env.validinputs) == 1:
         LAST_INFO = {"simulations": 0, "seconds": 0.0}

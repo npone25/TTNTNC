@@ -37,10 +37,22 @@ class Node:
     def __init__(self, parent, move, prior):
         self.parent = parent      # nút cha (None nếu là gốc)
         self.move = move          # cột đã đi để tới nút này (None nếu là gốc)
-        self.prior = prior        # mức "đáng thử" do evaluate_leaf đưa ra; cấp 4 chia đều, cấp 7 lấy từ mạng policy
+        self.prior = prior        # mức "đáng thử" do evaluate_leaf đưa ra; 1 nếu là nút gốc; cấp 4 chia đều, cấp 7 lấy từ mạng policy
         self.children = {}        # {cột: nút con}; rỗng nghĩa là nút lá
         self.visits = 0           # số lần mô phỏng đã đi qua nút này
         self.value_sum = 0.0      # tổng điểm qua các lần đó, theo góc người đã đi node.move
+
+    """def uniform_rollout_evaluator(env): priors được lấy từ đây: chia đều cho số cột còn đi được, value được lấy từ random_rollout_value(env) (cấp 4).
+            priors = {}
+            legal = env.validinputs          # các cột còn đi được, ví dụ [3, 4, 7]
+            for move in legal:
+                priors[move] = 1.0 / len(legal)   # chia đều: 1/3 mỗi cột
+            return priors, random_rollout_value(env)"""
+
+
+    """Khóa dict của children dùng khi đứng ở cha và muốn tìm con theo cột, ví dụ root.children[3].
+        node.move dùng khi chỉ cầm trong tay nút con mà không biết nó nằm ở khóa nào. 
+        Ví dụ trong select, select_child trả về một nút, rồi code gọi env.step(node.move) để đi đúng cột đó trên bàn nháp."""
 
     def q(self):
         """Điểm trung bình theo góc người đã đi node.move, trong [-1, 1] (0 nếu chưa thăm)."""
@@ -77,7 +89,8 @@ def expand(node, priors):
     Con mới tạo chưa được thăm lần nào; các lần mô phỏng sau sẽ chọn tới chúng.
     """
     for move, prior in priors.items():
-        node.children[move] = Node(node, move, prior)
+        node.children[move] = Node(node, move, prior) #    node.children = {3: <nút cột 3>, 4: <nút cột 4>, 7: <nút cột 7>}.
+
 
 
 def simulate(env, evaluate_leaf):
@@ -159,7 +172,7 @@ def most_visited_move(root):
             best_moves = [move]
         elif child.visits == best_visits:
             best_moves.append(move)
-    return random.choice(best_moves)
+    return random.choice(best_moves) # tình huống ngẫu nhiên khi nhiều cột bằng nhau, ví dụ 3 cột đều được thử 100 lần.
 
 
 def root_statistics(root):
