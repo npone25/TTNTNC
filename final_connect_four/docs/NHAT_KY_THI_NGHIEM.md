@@ -116,6 +116,53 @@ Kiểm tra nhanh trên máy ảo (2 nhân, Linux), cấp 7 đấu cấp 4, 30 v�
 - `win_check` bật cho cấp 7 và cho cả bốn cấu hình ablation, để ablation vẫn chỉ khác ở prior và value. Ngoài ra, nb5 chơi lại các ván thử với `win_check` tắt để đo riêng tác dụng của nó.
 - Dải `c_puct` mở rộng thành {0,5; 0,7; 1,0; 1,5}.
 
-### Cấp 7, lần 2: kết quả
+### Cấp 7, lần 2: kết quả (nb5)
 
-(Điền khi nb5 chạy xong.)
+- Sinh 3000 ván tự chơi mất 57 s, trung bình 27 nước mỗi ván. Gán nhãn 53.845 thế mới bằng 14 tiến trình mất 2174 s. Mạng value học tổng cộng 120.159 thế.
+- Chọn k = 10: sai số với kết quả ván 0,836, so với 0,839 ở k = 5 và 0,881 ở k = 20.
+- Mạng value: dừng ở epoch 10, giữ epoch 5, huấn luyện 188,5 s. Test MSE 0,161 và MAE 0,267, mốc luôn đoán trung bình là MSE 0,336 và MAE 0,437. Trong 3404 thế thắng chắc hoặc thua chắc ở tập test, mạng đoán đúng dấu 88,1%.
+- Dò `c_puct` bằng 60 ván với cấp 4: 0,5 được 0,75; 0,7 được 0,617; 1,0 được 0,55; 1,5 được 0,60. Chọn 0,5. Giá trị này lại nằm ở mép dưới của dải, nhưng không còn thời gian dò thêm; ghi là hạn chế.
+- Tác dụng của `win_check`, cùng 60 ván với c = 0,5: bật được 0,75, tắt được 0,633.
+- Ablation, 200 ván với cấp 3:
+  - MCTS thuần: 0,075;
+  - chỉ thêm prior: 0,282;
+  - chỉ thêm value: 0,618;
+  - đầy đủ: 0,652.
+  Ở phiên bản 1, thêm value làm cấp 7 yếu đi; lần này mạng value là thành phần đóng góp nhiều nhất.
+- RQ3, cùng số mô phỏng với cấp 4: 50 mô phỏng được 0,887; 200 được 0,848; 800 được 0,698. Cùng thời gian: 0,2 s được 0,422; 0,5 s được 0,422; 1,0 s được 0,287.
+  - Cùng thời gian, cấp 4 chạy được nhiều mô phỏng hơn khoảng 2–2,5 lần (2592 so với 1027 ở 0,2 s), vì mỗi mô phỏng của cấp 7 phải gọi mạng.
+  - Mỗi mô phỏng của cấp 7 có giá trị hơn mô phỏng của cấp 4, nhưng chưa đủ để bù số lượng. Lợi thế cũng thu hẹp khi tăng ngân sách.
+- Cấp 7 đấu cấp 5: 0,935 [0,89; 0,96].
+- Chiến thuật: cấp 7 đúng 80%, chặn 100%, đòn đôi 54%. Cấu hình "chỉ thêm value" đúng 97,5%.
+- `agents.cap7.params.c_puct` trong `config.yaml` sửa thành 0,5 trước khi chạy giải vòng tròn.
+
+### Giải vòng tròn (nb6, phiên bản 2)
+
+- 21 cặp × 200 ván, mở đầu 2 nước ngẫu nhiên có seed. Notebook chạy một mình trên máy, nên số đo thời gian không bị notebook khác làm chậm. Các cặp có cấp 7 chiếm khoảng 3 trong khoảng 3,5 tiếng chạy.
+- Xếp hạng theo score trung bình:
+  1. cấp 7: 0,865
+  2. cấp 3: 0,800
+  3. cấp 4: 0,741
+  4. cấp 2: 0,488
+  5. cấp 6: 0,293
+  6. cấp 5: 0,254
+  7. cấp 1: 0,058
+- Cấp 7 thắng mọi cấp còn lại: cấp 3 được 0,625; cấp 4 được 0,705; cấp 5 được 0,917; cấp 6 được 0,988; cấp 2 được 0,958; cấp 1 được 1,0.
+- So với phiên bản 1: cấp 7 từ hạng 3 lên hạng 1. Cấp 6 vượt cấp 5 (đối đầu 0,802), nhưng cả hai vẫn thua cấp 2, 3, 4. Cấp 5 và 6 còn thua cấp 1 khoảng 15–20% số ván: hai mạng này đi tất định và yếu chiến thuật, nên nước ngẫu nhiên đôi khi tạo được hàng bốn mà chúng không chặn.
+- Bên đi trước: mọi cấp đều có lợi khi cầm đỏ. Chênh lệch nhỏ nhất ở cấp 7 (0,872 so với 0,859) và cấp 4 (0,749 so với 0,732).
+- Chi phí trung bình mỗi nước:
+  - cấp 7: 686 ms (196 mô phỏng);
+  - cấp 4: 87 ms (397 mô phỏng);
+  - cấp 3: 59 ms (462 nút);
+  - cấp 5, cấp 6: khoảng 2,4 ms.
+- Mô hình: cấp 5 và 6 mỗi mạng 4,24 MB; cấp 7 dùng hai mạng, tổng 8,48 MB. Thời gian huấn luyện: cấp 5 113 s, cấp 6 1601 s, mạng value của cấp 7 302 s (chưa tính sinh ván tự chơi và gán nhãn).
+- Chiến thuật: cấp 2, 3, 4 đúng 100%; cấp 7 đúng 80%; cấp 6 đúng 32,5%; cấp 5 đúng 30%; cấp 1 đúng 25%.
+
+### Ảnh hưởng của seed (nb7, phiên bản 2)
+
+- Seed huấn luyện cấp 5 (nhãn Alpha-Beta): test acc 0,583; 0,565; 0,576. Trung bình 0,575, độ lệch chuẩn khoảng 0,009. Cả ba seed đều giữ epoch 6.
+- Seed ván đấu, cấp 4 đấu cấp 3: 0,385; 0,36; 0,25, trùng khớp từng ván với phiên bản 1. Lý do là cấp 3, cấp 4 và các seed không đổi; điều này cho thấy kết quả chạy lại được.
+
+### Kiểm thử (nb1)
+
+- Chạy lại sau mọi thay đổi của phiên bản 2: 88 test đều qua.

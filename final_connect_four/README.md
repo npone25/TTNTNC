@@ -31,6 +31,20 @@ Repository: https://github.com/npone25/TTNTNC (thư mục `final_connect_four`)
 
 Lý do và số liệu của từng bước nằm trong `docs/NHAT_KY_THI_NGHIEM.md`.
 
+### Kết quả chính (phiên bản 2)
+
+- Giải vòng tròn 21 cặp × 200 ván, xếp hạng theo score trung bình:
+  1. cấp 7: 0,865
+  2. cấp 3: 0,800
+  3. cấp 4: 0,741
+  4. cấp 2: 0,488
+  5. cấp 6: 0,293
+  6. cấp 5: 0,254
+  7. cấp 1: 0,058
+- RQ1 (cấp 3 và cấp 4 cùng thời gian): thời gian càng nhiều thì MCTS càng lấn Alpha-Beta.
+- RQ2: cấp 6 thắng cấp 5 khi đối đầu (0,74 ở nb4, 0,80 ở giải đấu), nhưng không hơn cấp 5 trước các đối thủ khác.
+- RQ3: cùng số mô phỏng, cấp 7 thắng cấp 4 (0,89 / 0,85 / 0,70 ở 50 / 200 / 800 mô phỏng). Cùng thời gian thì thua (0,42 / 0,42 / 0,29 ở 0,2 / 0,5 / 1,0 s), vì mỗi mô phỏng phải gọi mạng nên cấp 4 chạy được nhiều mô phỏng hơn khoảng 2,5 lần.
+
 ## 1. Cài đặt
 
 Python 3.13 (3.10–3.12 cũng được), TensorFlow 2.21 với Keras 3, chạy bằng CPU.
